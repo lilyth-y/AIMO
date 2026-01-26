@@ -1,0 +1,8 @@
+2025-11-28T13:59:30.2969309+09:00 - Monitor started for PID 20516, watching C:\startingup\AIMO\AIMO_core\models\Qwen2.5-Math-72B-Instruct
+2025-11-28T13:59:30.4139734+09:00 - PID 20516 Running CPU=0.3 WS(MB)=79.3 | Files=29 Safetensors=0 TotalSizeGB=3.57
+2025-11-28T14:01:30.4378385+09:00 - PID 20516 Running CPU=0.36 WS(MB)=82.8 | Files=29 Safetensors=0 TotalSizeGB=3.57
+2025-11-28T14:03:30.4630349+09:00 - PID 20516 Running CPU=0.41 WS(MB)=84.2 | Files=29 Safetensors=0 TotalSizeGB=4.914
+2025-11-28T14:05:30.4848440+09:00 - PID 20516 Running CPU=0.41 WS(MB)=84.5 | Files=29 Safetensors=0 TotalSizeGB=7.248
+2025-11-28T14:07:30.5151432+09:00 - PID 20516 Running CPU=0.42 WS(MB)=84.5 | Files=29 Safetensors=0 TotalSizeGB=7.248
+2025-11-28T14:09:30.5289912+09:00 - PID 20516 Running CPU=0.44 WS(MB)=84.5 | Files=29 Safetensors=0 TotalSizeGB=8.058
+2025-11-28T14:11:30.5539497+09:00 - PID 20516 Running CPU=0.45 WS(MB)=84.5 | Files=29 Safetensors=0 TotalSizeGB=11.095

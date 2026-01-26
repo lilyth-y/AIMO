@@ -1,0 +1,62 @@
+version: '3.9'
+services:
+  aimo:
+    build:
+      context: .
+      args:
+        USE_GPU: "false"
+    image: aimo:latest
+    container_name: aimo_app
+    environment:
+      - HF_HOME=/app/.cache/huggingface
+      - TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers
+      - AIMO_FAST_TEST=1
+      - TOKENIZERS_PARALLELISM=false
+      - HF_ENABLE_PARALLEL_LOADING=1
+    volumes:
+      - ./logs:/app/logs
+      - ./results:/app/results
+      - hf_cache:/app/.cache/huggingface
+    command: ["test"]
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4G
+
+  eval:
+    build: .
+    image: aimo:latest
+    container_name: aimo_eval
+    environment:
+      - HF_HOME=/app/.cache/huggingface
+      - TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers
+      - HF_ENABLE_PARALLEL_LOADING=1
+    volumes:
+      - ./logs:/app/logs
+      - ./results:/app/results
+      - hf_cache:/app/.cache/huggingface
+    command: ["eval"]
+    depends_on:
+      - aimo
+  aimo_reference:
+    build: .
+    image: aimo:latest
+    container_name: aimo_reference
+    environment:
+      - HF_HOME=/app/.cache/huggingface
+      - TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers
+      - HF_ENABLE_PARALLEL_LOADING=1
+    volumes:
+      - ./logs:/app/logs
+      - ./results:/app/results
+      - hf_cache:/app/.cache/huggingface
+    command: ["aimo"]
+    deploy:
+      resources:
+        limits:
+          cpus: "8"
+          memory: 16G
+
+volumes:
+  hf_cache: {}

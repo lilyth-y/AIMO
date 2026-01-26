@@ -1,0 +1,11 @@
+torch
+transformers
+accelerate
+bitsandbytes
+sentencepiece
+sympy
+scikit-learn
+joblib
+
+/* Optional: for GPU systems */
+# torch with CUDA is best installed from the PyTorch site depending on CUDA version

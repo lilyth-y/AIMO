@@ -1,0 +1,16 @@
+pandas
+polars
+sympy
+scipy
+numpy
+protobuf
+grpcio
+pyarrow
+# Runtime / model stack
+transformers
+accelerate
+safetensors
+sentencepiece
+psutil
+tqdm
+torch --extra-index-url https://download.pytorch.org/whl/cpu

@@ -1,0 +1,28 @@
+================================================================================
+AIMO Reference Problem Evaluation
+================================================================================
+Problems: 5
+Difficulty: IMO/AIME Level
+Answer Range: 0-99999 (5-digit integers)
+
+Loading Math-specialized 7B with 4-bit quantization...
+Model: Qwen/Qwen2.5-Math-7B-Instruct
+Est. VRAM: 6GB
+[GPU] NVIDIA GeForce RTX 4060 Laptop GPU (8.0GB VRAM)
+[Quantization] Using 4bit
+
+Fetching 4 files:   0%|          | 0/4 [00:00<?, ?it/s]Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Error while downloading from https://huggingface.co/Qwen/Qwen2.5-Math-7B-Instruct/resolve/ef9926d75ab1d54532f6a30dd5e760355eb9aa4d/model-00004-of-00004.safetensors: HTTPSConnectionPool(host='cas-bridge.xethub.hf.co', port=443): Read timed out.
+Trying to resume download...
+Error while downloading from https://huggingface.co/Qwen/Qwen2.5-Math-7B-Instruct/resolve/ef9926d75ab1d54532f6a30dd5e760355eb9aa4d/model-00004-of-00004.safetensors: HTTPSConnectionPool(host='cas-bridge.xethub.hf.co', port=443): Read timed out.
+Trying to resume download...
+
+Fetching 4 files:   0%|          | 0/4 [07:15<?, ?it/s]
+
+Fetching 4 files:   0%|          | 0/4 [00:00<?, ?it/s]Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`
+Xet Storage is enabled for this repo, but the 'hf_xet' package is not installed. Falling back to regular HTTP download. For better performance, install the package with: `pip install huggingface_hub[hf_xet]` or `pip install hf_xet`

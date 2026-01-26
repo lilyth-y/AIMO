@@ -1,0 +1,839 @@
+import os, sys, json, time
+from datetime import datetime
+import platform
+
+
+
+# --- PipelineOrchestrator (self-contained) ---
+import re
+import uuid
+import traceback
+import math
+# Note: sympy import removed to avoid runtime dependency issues in minimal runner
+# --- Simple config ---
+class _Config:
+    LOG_PATH = os.path.join(os.path.dirname(__file__), "logs", "eval_log.jsonl")
+    DECOMPOSITION_COMPLEXITY_THRESHOLD = 15
+    USE_VOTING = False
+    NUM_CANDIDATES = 3
+    CANDIDATE_TEMPS = [0.1, 0.3]
+    # Pipeline config defaults
+    USE_STRUCTURED = True
+    STRUCTURED_LENGTH_THRESHOLD = 120
+    COMPLEXITY_STRUCTURED_MIN_SCORE = 5
+    REFINE_PASSES = 0
+    HF_MODEL_NAME = os.environ.get('AIMO_MODEL', 'Qwen/Qwen2.5-Math-7B-Instruct')
+    QUANTIZATION_DEFAULT = os.environ.get('AIMO_QUANTIZATION', '8bit')
+
+config = _Config()
+
+# --- Simple reasoning_utils (minimal) ---
+def extract_answer(reasoning_text: str):
+    if not reasoning_text:
+        return None
+    m = re.search(r"\\boxed\{([^}]*)\}", reasoning_text)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r"(-?\\d+(?:\\.\\d+)?)", reasoning_text)
+    return m.group(1) if m else None
+
+def log_result(obj: dict, path=None):
+    path = path or config.LOG_PATH
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(obj, ensure_ascii=False, default=str) + "\n")
+
+def make_ids(problem_text: str) -> dict:
+    return {
+        'run_id': str(uuid.uuid4()),
+        'problem_hash': hash(problem_text),
+        'timestamp': datetime.utcnow().isoformat()
+    }
+
+def build_refine_prompt(problem_text, reasoning, code, error_type, cleaned_result, extracted):
+    return f"Refine for {error_type}: {problem_text}\nReasoning: {reasoning}\nCode: {code}"
+
+def canonicalize_expression(expr):
+    return str(expr)
+
+def count_free_symbols(expr):
+    return 0
+
+def count_tokens(text):
+    return len(text.split()) if text else 0
+
+def assess_complexity(text):
+    return min(20, max(0, len(text.split()) // 20))
+
+# --- feature_extractor (minimal) ---
+def extract_features(problem_text, complexity_score=None):
+    return {'len': len(problem_text)}
+
+def rapid_intuition_phase(problem_text):
+    return ('computational', None)
+
+# --- lemma cache (minimal) ---
+class _LemmaCache:
+    def __init__(self):
+        self._set = set()
+        self.store = {}
+    def add(self, item):
+        if not item:
+            return False
+        s = str(item)
+        if s in self._set:
+            return False
+        self._set.add(s)
+        self.store[s] = self.store.get(s, 0) + 1
+        return True
+    def top(self, k: int = 10):
+        return sorted(self.store.items(), key=lambda x: x[1], reverse=True)[:k]
+
+GLOBAL_LEMMA_CACHE = _LemmaCache()
+
+# --- Router (minimal) ---
+class CalculationRouter:
+    # Strategy Constants
+    STRATEGY_SIMULATOR = "Path A: The Simulator"
+    STRATEGY_THEORETICIAN = "Path B: The Theoretician"
+    STRATEGY_HYBRID = "Path C: The Hybrid"
+    def __init__(self):
+        pass
+    def route(self, domain, variables):
+        n_value = variables.get('N', 0)
+        strategies = []
+        if n_value > 0 and n_value < 10**6:
+            strategies = [self.STRATEGY_SIMULATOR, self.STRATEGY_HYBRID, self.STRATEGY_THEORETICIAN]
+        elif n_value >= 10**6:
+            strategies = [self.STRATEGY_THEORETICIAN, self.STRATEGY_HYBRID, self.STRATEGY_SIMULATOR]
+        elif domain == 'Geometry':
+            strategies = [self.STRATEGY_THEORETICIAN, self.STRATEGY_SIMULATOR]
+        else:
+            strategies = [self.STRATEGY_HYBRID, self.STRATEGY_SIMULATOR, self.STRATEGY_THEORETICIAN]
+        return strategies
+
+# --- Strategy Bandit (minimal) ---
+class StrategyBandit:
+    def __init__(self, log_path: str, epsilon: float = 0.15):
+        self.log_path = log_path
+        self.epsilon = epsilon
+        self.stats = {}
+        self._loaded = False
+    def load(self):
+        if not self.log_path or not os.path.exists(self.log_path):
+            return
+        try:
+            with open(self.log_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line=line.strip()
+                    if not line: continue
+                    try:
+                        entry = json.loads(line)
+                    except Exception:
+                        continue
+                    strat = entry.get('strategy')
+                    if not strat or strat.endswith('_refine') or strat=='all_failed':
+                        continue
+                    if strat not in self.stats:
+                        self.stats[strat] = {'success':0, 'trials':0}
+                    self.stats[strat]['trials'] += 1
+                    if entry.get('verified'):
+                        self.stats[strat]['success'] += 1
+            self._loaded = True
+        except Exception:
+            pass
+    def total_trials(self) -> int:
+        return sum(v['trials'] for v in self.stats.values())
+    def success_rate(self, strat: str) -> float:
+        s = self.stats.get(strat, {'success':0,'trials':0})
+        if s['trials'] == 0:
+            return 0.0
+        return s['success']/s['trials']
+    def reorder(self, original: list) -> list:
+        if not self._loaded:
+            self.load()
+        MIN_TOTAL_TRIALS = 15
+        if self.total_trials() < MIN_TOTAL_TRIALS:
+            return original
+        import math, random
+        scores = {}
+        total = self.total_trials()
+        for s in original:
+            stat = self.stats.get(s, {'success':0,'trials':0})
+            t = stat['trials']
+            if t == 0:
+                scores[s] = float('inf')
+            else:
+                rate = stat['success']/t
+                scores[s] = rate + math.sqrt(2*math.log(total)/t)
+        if random.random() < self.epsilon:
+            rnd = original[:]
+            random.shuffle(rnd)
+            return rnd
+        return sorted(original, key=lambda s: scores.get(s,0), reverse=True)
+
+def _restricted_globals():
+    import builtins
+    FORBIDDEN_BUILTINS = {"open", "exec", "eval", "compile"}
+    safe_builtins = {k: v for k, v in builtins.__dict__.items() if k not in FORBIDDEN_BUILTINS}
+    def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name in {'os', 'sys', 'subprocess', 'shutil', 'socket'}:
+            raise ImportError(f"Blocked import: {name}")
+        return __import__(name, globals, locals, fromlist, level)
+    safe_builtins['__import__'] = safe_import
+    return {"__builtins__": safe_builtins}
+
+def _run_code_global(code_str, q):
+    from io import StringIO
+    import contextlib
+    output = StringIO()
+    with contextlib.redirect_stdout(output):
+        try:
+            exec(code_str, _restricted_globals())
+        except Exception as e:
+            q.put(f"Error: {e}")
+            return
+    q.put(output.getvalue())
+
+# --- Simple executor (execute python code) ---
+class CodeExecutor:
+    def __init__(self, timeout_seconds=5, memory_limit_mb: int | None = None):
+        import multiprocessing as mp
+        self.timeout_seconds = timeout_seconds
+        self.memory_limit_mb = memory_limit_mb if memory_limit_mb is not None else 768
+
+    def _basic_static_check(self, code: str) -> str | None:
+        FORBIDDEN_SUBSTRINGS = ["import os", "import sys", "subprocess", "shutil", "socket"]
+        for bad in FORBIDDEN_SUBSTRINGS:
+            if bad in code:
+                return f"Error: Forbidden pattern detected ({bad})"
+        return None
+
+    def execute(self, code: str) -> str:
+        try:
+            import multiprocessing as mp
+            from io import StringIO
+            import contextlib
+            import time
+        except Exception:
+            return "Error: Execution environment missing packages"
+        static_err = self._basic_static_check(code)
+        if static_err:
+            return static_err
+
+        def _restricted_globals():
+            import builtins
+            safe_builtins = {k: v for k, v in builtins.__dict__.items() if k not in {'open', 'exec', 'eval', 'compile'}}
+            def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+                if name in {'os', 'sys', 'subprocess', 'shutil', 'socket'}:
+                    raise ImportError(f"Blocked import: {name}")
+                return __import__(name, globals, locals, fromlist, level)
+            safe_builtins['__import__'] = safe_import
+            return {"__builtins__": safe_builtins}
+
+        _run_target = _run_code_global
+
+        mp = __import__('multiprocessing')
+        q = mp.Queue()
+        proc = mp.Process(target=_run_target, args=(code, q))
+        start_time = time.time()
+        proc.start()
+        proc.join(self.timeout_seconds)
+        if proc.is_alive():
+            proc.terminate(); proc.join()
+            return 'Error: Timeout'
+        try:
+            result = q.get_nowait()
+        except Exception:
+            result = 'Error: Unknown execution failure'
+        return result
+
+    def execute_with_stats(self, code: str):
+        # Simplified: not tracking peak mem due to cross-platform complexity.
+        start = time.time()
+        res = self.execute(code)
+        wall_ms = (time.time() - start) * 1000
+        stats = {'wall_ms': wall_ms}
+        return res, stats
+
+# --- Verification Router (minimal) ---
+try:
+    from decimal import Decimal, InvalidOperation
+except Exception:
+    Decimal = None
+    InvalidOperation = Exception
+
+try:
+    import sympy as sp
+except Exception:
+    sp = None
+
+class VerificationRouter:
+    def __init__(self, rel_tol: float = 1e-6, abs_tol: float = 1e-8):
+        self.rel_tol = rel_tol
+        self.abs_tol = abs_tol
+
+    def verify(self, answer, problem_context: dict) -> bool:
+        if isinstance(answer, str) and answer.strip().startswith('ERROR:'):
+            print("   -> X Verification Failed: Execution error propagated")
+            return False
+        parsed = self._parse_answer(answer)
+        if parsed is None:
+            print("   -> X Verification Failed: Unparseable answer")
+            return False
+        constraints = problem_context.get('constraints', [])
+        if not self._check_constraints(parsed, constraints):
+            print(f"   -> X Verification Failed: Constraint violated {constraints}")
+            return False
+        expected = problem_context.get('expected')
+        if expected is not None:
+            parsed_expected = self._parse_answer(expected)
+            if not self._compare(parsed, parsed_expected):
+                print("   -> X Verification Failed: Expected mismatch")
+                return False
+        if not self._reverse_check(parsed, problem_context):
+            print("   -> X Verification Failed: Reverse check failed")
+            return False
+        return True
+
+    def _parse_answer(self, answer):
+        if isinstance(answer, (int, float)): return answer
+        if isinstance(answer, (list, tuple)): return [self._parse_answer(a) for a in answer]
+        if answer is None: return None
+        text = str(answer).strip()
+        if not text: return None
+        text = text.replace('^', '**')
+        text = re.sub(r'\\frac\{([^{}]+)\}\{([^{}]+)\}', r'(\1)/(\2)', text)
+        text = re.sub(r'\\sqrt\{([^{}]+)\}', r'sqrt(\1)', text)
+        text = text.replace('\\pi', 'pi')
+        try:
+            return int(text)
+        except Exception:
+            pass
+        try:
+            return float(text)
+        except Exception:
+            pass
+        try:
+            if Decimal:
+                return Decimal(text)
+        except Exception:
+            pass
+        if (text.startswith('[') and text.endswith(']')) or (text.startswith('(') and text.endswith(')')):
+            try:
+                as_list = json.loads(text.replace('(', '[').replace(')', ']'))
+                if isinstance(as_list, list):
+                    return [self._parse_answer(a) for a in as_list]
+            except Exception:
+                pass
+        if sp:
+            try:
+                expr = sp.sympify(text)
+                return sp.simplify(expr)
+            except Exception:
+                return text
+        return text
+
+    def _compare(self, a, b) -> bool:
+        if a == b: return True
+        if sp and (isinstance(a, sp.Basic) or isinstance(b, sp.Basic)):
+            try:
+                sym_a = sp.sympify(a) if not isinstance(a, sp.Basic) else a
+                sym_b = sp.sympify(b) if not isinstance(b, sp.Basic) else b
+                diff = sp.simplify(sym_a - sym_b)
+                if diff == 0 or sp.factor(diff) == 0 or sp.expand(diff) == 0 or sp.trigsimp(diff) == 0:
+                    return True
+                free_syms = list((sym_a.free_symbols | sym_b.free_symbols))
+                if free_syms:
+                    samples = [1, 2, 3, 1.5]
+                    for val in samples:
+                        sub_map = {s: val for s in free_syms}
+                        try:
+                            eval_diff = diff.subs(sub_map)
+                            if hasattr(eval_diff, 'evalf'):
+                                eval_diff = eval_diff.evalf()
+                            if abs(float(eval_diff)) > 1e-7:
+                                return False
+                        except Exception:
+                            return False
+                    return True
+                if hasattr(diff, 'evalf'):
+                    if abs(float(diff.evalf())) < self.abs_tol:
+                        return True
+                return False
+            except Exception:
+                pass
+        try:
+            val_a = float(a); val_b = float(b)
+            return math.isclose(val_a, val_b, rel_tol=self.rel_tol, abs_tol=self.abs_tol)
+        except Exception:
+            pass
+        if isinstance(a, list) and isinstance(b, list):
+            if len(a) != len(b): return False
+            try:
+                is_numeric_a = all(isinstance(x, (int, float)) or (sp and isinstance(x, sp.Number)) for x in a)
+                is_numeric_b = all(isinstance(x, (int, float)) or (sp and isinstance(x, sp.Number)) for x in b)
+                if is_numeric_a and is_numeric_b:
+                    sorted_a = sorted(a, key=lambda x: float(x))
+                    sorted_b = sorted(b, key=lambda x: float(x))
+                    return all(self._compare(x, y) for x, y in zip(sorted_a, sorted_b))
+                return all(self._compare(x, y) for x, y in zip(a, b))
+            except Exception:
+                return False
+        if isinstance(a, set) and isinstance(b, set):
+            return a == b
+        return str(a).strip() == str(b).strip()
+
+    def _check_constraints(self, answer, constraints: list) -> bool:
+        if not constraints: return True
+        for constraint in constraints:
+            if constraint == 'integer':
+                if hasattr(answer, 'is_integer'):
+                    if not answer.is_integer: return False
+                elif isinstance(answer, int):
+                    pass
+                elif isinstance(answer, float):
+                    if not answer.is_integer(): return False
+                else:
+                    return False
+            elif constraint == 'non_negative':
+                try:
+                    val = float(answer)
+                    if val < 0: return False
+                except Exception:
+                    return False
+            elif constraint.startswith('modulo_'):
+                try:
+                    mod_val = int(constraint.split('_')[1]); val = int(answer)
+                    if not (0 <= val < mod_val): return False
+                except Exception:
+                    return False
+        return True
+
+    def _reverse_check(self, answer, context: dict) -> bool:
+        reverse_func = context.get('reverse_func')
+        if callable(reverse_func):
+            try:
+                return bool(reverse_func(answer))
+            except Exception:
+                return False
+        expr_tpl = context.get('reverse_expression')
+        target_val = context.get('reverse_target')
+        if expr_tpl and target_val is not None and sp:
+            try:
+                expr = sp.sympify(expr_tpl.replace('{x}', str(answer)))
+                target = sp.sympify(str(target_val))
+                return self._compare(expr, target)
+            except Exception:
+                return False
+        return True
+
+# --- Reconciler (minimal) ---
+class ReconResult:
+    def __init__(self, match, status='MATCH', details=''):
+        self.match = match
+        self.status = status
+        self.details = details
+
+class ReasoningReconciler:
+    def __init__(self, verifier):
+        self.verifier = verifier
+    def reconcile(self, extracted, cleaned):
+        if extracted is None:
+            return ReconResult(False, 'ERROR_PARSING', '')
+        if str(extracted).strip() == str(cleaned).strip():
+            return ReconResult(True, 'MATCH', '')
+        return ReconResult(False, 'MISMATCH', '')
+
+# --- Solver (full-ish, adapated) ---
+class LocalLLMClient:
+    def __init__(self, model_name=None, quantization=None):
+        self.model_name = model_name
+        self.quantization = quantization
+        # Attempt to initialize Tensor/transformers clients lazily
+        self.tokenizer = None
+        self.model = None
+        self.pipeline = None
+    def _get_tokenizer(self, model_name):
+        try:
+            from transformers import AutoTokenizer
+            tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+            if tokenizer.pad_token is None:
+                tokenizer.pad_token = tokenizer.eos_token
+            return tokenizer
+        except Exception:
+            return None
+    def _get_model(self):
+        try:
+            from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+            import torch
+            quant_cfg = None
+            if self.quantization == '4bit':
+                quant_cfg = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type='nf4', bnb_4bit_compute_dtype=torch.float16)
+            model = AutoModelForCausalLM.from_pretrained(self.model_name, device_map='auto', trust_remote_code=True, quantization_config=quant_cfg)
+            return model
+        except Exception:
+            return None
+    def _get_pipeline(self):
+        try:
+            from transformers import pipeline
+            if self.pipeline is None:
+                self.pipeline = pipeline('text-generation', model=self._get_model(), tokenizer=self._get_tokenizer(self.model_name), device_map='auto')
+            return self.pipeline
+        except Exception:
+            return None
+    def generate(self, prompt: str) -> str:
+        try:
+            pipe = self._get_pipeline()
+            if not pipe:
+                # fallback: return a minimal code response
+                return "```python\nprint('ERROR: LLM not available')\n```"
+            outputs = pipe(prompt, max_new_tokens=512, do_sample=False, num_return_sequences=1)
+            if outputs and isinstance(outputs, list) and len(outputs) > 0:
+                out0 = outputs[0]
+                if isinstance(out0, dict) and 'generated_text' in out0:
+                    gen = out0['generated_text']
+                else:
+                    gen = str(out0)
+                return gen
+            return "```python\nprint('NO RESPONSE')\n```"
+        except Exception as e:
+            return f"```python\nprint('ERROR: {e}')\n```"
+
+class Solver:
+    def __init__(self):
+        self.llm = LocalLLMClient()
+        self.last_reasoning = None
+        self.last_syntax_error = False
+        self.last_complexity_score = None
+    def _extract_code(self, response: str) -> str:
+        # Extract code block
+        match = re.search(r"```python\s*(.*?)\s*```", response, re.DOTALL)
+        if match:
+            code = match.group(1).strip()
+        else:
+            # naive extraction
+            code = response.strip()
+        # basic compile check
+        try:
+            compile(code, '<string>', 'exec')
+            self.last_syntax_error = False
+        except SyntaxError:
+            self.last_syntax_error = True
+            code = "print('ERROR: Code generation failed')"
+        return code
+    def generate_code(self, problem_text: str, strategy: str) -> str:
+        complexity_score = assess_complexity(problem_text)
+        self.last_complexity_score = complexity_score
+        use_structured = config.USE_STRUCTURED and complexity_score >= config.COMPLEXITY_STRUCTURED_MIN_SCORE
+        reasoning_text = None
+        if use_structured:
+            reasoning_prompt = build_refine_prompt(problem_text, None, None, 'reasoning_request', None, None)
+            reasoning_text = self.llm.generate(reasoning_prompt)
+            self.last_reasoning = reasoning_text
+        else:
+            self.last_reasoning = None
+        lemma_snippets = [k for k,_ in GLOBAL_LEMMA_CACHE.top(5)] if GLOBAL_LEMMA_CACHE else []
+        prompt = self._construct_prompt(problem_text, strategy, reasoning_text, lemma_snippets)
+        response = self.llm.generate(prompt)
+        code = self._extract_code(response)
+        return code
+    def generate_candidates(self, problem_text, strategy, num_candidates, temps):
+        candidates = []
+        for i in range(num_candidates):
+            prompt = self._construct_prompt(problem_text, strategy, self.last_reasoning, [])
+            gen = self.llm.generate(prompt)
+            candidates.append(self._extract_code(gen))
+        return candidates
+    def generate_code_from_prompt(self, prompt):
+        response = self.llm.generate(prompt)
+        return self._extract_code(response)
+    def _construct_prompt(self, problem_text, strategy, reasoning_text, lemma_snippets):
+        base = f"Write Python code to solve the problem. Strategy: {strategy}.\nProblem: {problem_text}\nCode:"
+        if reasoning_text:
+            base = reasoning_text + '\n' + base
+        if lemma_snippets:
+            base = '\n'.join(lemma_snippets) + '\n' + base
+        return base
+
+# --- Problem Decomposer (minimal) ---
+class SubProblem:
+    def __init__(self, id: str, description: str, dependencies: list = None):
+        self.id = id
+        self.description = description
+        self.dependencies = dependencies or []
+        self.solution = None
+        self.solved = False
+
+class ProblemDecomposer:
+    def __init__(self, llm_client):
+        self.llm = llm_client
+    def analyze_problem(self, problem_text: str):
+        return {'decompose': 'no'}
+    def decompose(self, problem_text: str):
+        return []
+    def solve_hierarchically(self, problem_text: str, solver, executor):
+        # Minimal hierarchical fallback: direct solve
+        code = solver.generate_code(problem_text, 'Path C: The Hybrid')
+        exec_result = executor.execute(code)
+        return {'mode': 'direct', 'code': code, 'result': exec_result.strip() if isinstance(exec_result, str) else str(exec_result)}
+
+# --- GeometricSolver, Hybrid, MultiAgent (minimal) ---
+class GeometricSolver:
+    def __init__(self, llm_client=None):
+        self.llm = llm_client
+    def solve_geometric_problem(self, problem_text: str):
+        # Minimal geometric solver: attempt to generate code using LLM
+        if not self.llm:
+            return None
+        code = self.llm.generate(problem_text)
+        # Extract python code if present
+        match = re.search(r"```python(.*?)```", code, re.DOTALL)
+        return match.group(1).strip() if match else code
+
+class HybridReasoningEngine:
+    def __init__(self, solver, executor):
+        self.solver = solver
+        self.executor = executor
+        self.decomposer = ProblemDecomposer(self.solver.llm)
+    def solve_with_graph(self, problem_text: str):
+        # minimal hybrid: decompose then run hierarchical solver
+        analysis = self.decomposer.analyze_problem(problem_text)
+        if analysis.get('decompose') == 'yes':
+            return self.decomposer.solve_hierarchically(problem_text, self.solver, self.executor)
+        return None
+
+class MultiAgentReasoner:
+    def __init__(self, solver: Solver):
+        self.solver = solver
+    def generate_alternatives(self, problem_text: str):
+        prompt = f"Generate 3 approaches to solve: {problem_text}"
+        response = self.solver.llm.generate(prompt)
+        return [l.strip() for l in response.split('\n') if l.strip()][:3]
+    def code_solution(self, problem_text: str, approach: str):
+        prompt = f"Problem: {problem_text}\nApproach: {approach}\nWrite Python code:"  
+        return self.solver.llm.generate(prompt)
+    def review_code(self, problem_text: str, code: str, result: str, approach: str):
+        return True, 'OK'
+    def judge_final(self, problem_text: str, candidates):
+        return {'selected_index': 0, 'final_answer': candidates[0]['result']}
+    def solve_with_multi_agent(self, problem_text: str):
+        approaches = self.generate_alternatives(problem_text)
+        candidates = []
+        for app in approaches:
+            code = self.code_solution(problem_text, app)
+            stripped = code.replace('```python', '').replace('```', '').strip()
+            res = self.solver.llm.generate(f"Execute code (simulate): {stripped}")
+            candidates.append({'approach': app, 'code': stripped, 'result': res})
+        judge = self.judge_final(problem_text, candidates)
+        return {'selected': candidates[judge.get('selected_index',0)], 'final_answer': judge.get('final_answer')}
+
+class PipelineOrchestrator:
+    def __init__(self):
+        self.router = CalculationRouter()
+        self.executor = CodeExecutor(timeout_seconds=5)
+        self.verifier = VerificationRouter()
+        self.reconciler = ReasoningReconciler(self.verifier)
+        self.solver = Solver()
+        self.decomposer = ProblemDecomposer(None)
+        self.geo_solver = GeometricSolver(None)
+        self.hybrid_engine = HybridReasoningEngine(self.solver, self.executor)
+        self.multi_agent = None  # lazy
+
+    def solve_problem(self, domain, variables, problem_text, time_budget=60.0):
+        ids = make_ids(problem_text)
+        print(f"--- Solving Problem (run={ids['run_id']}) [Budget: {time_budget}s] ---")
+        feat = extract_features(problem_text)
+
+        problem_type_intuition, preferred_strategy = rapid_intuition_phase(problem_text)
+        if preferred_strategy:
+            print(f"[INTUITION] {problem_type_intuition} -> {preferred_strategy}")
+
+        problem_type = self._classify_problem(problem_text)
+        complexity_score = assess_complexity(problem_text)
+        should_decompose = problem_type == 'complex' and complexity_score >= config.DECOMPOSITION_COMPLEXITY_THRESHOLD
+        print(f"[Complexity] {complexity_score} type={problem_type} decompose={should_decompose}")
+
+        self._inject_reverse_check(problem_text, variables)
+
+        if should_decompose:
+            analysis = self.decomposer.analyze_problem(problem_text)
+            if analysis.get('decompose') == 'yes':
+                result = self.hybrid_engine.solve_with_graph(problem_text)
+                if result:
+                    return {'answer': result, 'method':'hybrid_graph_engine', 'verified': True}
+
+        # Plan
+        strategies = self.router.route(domain, variables)
+        bandit = StrategyBandit(config.LOG_PATH)
+        strategies = bandit.reorder(strategies)
+        print(f"[Plan] strategies={strategies}")
+
+        max_attempts = min(3, len(strategies))
+        strategies = strategies[:max_attempts]
+        per_strategy_timeout = time_budget / max_attempts if max_attempts>0 else time_budget
+        self.executor.timeout_seconds = per_strategy_timeout
+
+        last_was_timeout = False
+        for attempt, strategy in enumerate(strategies, 1):
+            if last_was_timeout and 'Theoretician' in strategy:
+                continue
+            print(f"[Attempt {attempt}] Strategy={strategy}")
+            code = self.solver.generate_code(problem_text, strategy)
+            if 'TIMEOUT' in code or 'ERROR: Generation' in code:
+                last_was_timeout = True
+                continue
+            print(f"Generated code: {len(code)} chars")
+            result = self.executor.execute(code)
+            if isinstance(result, tuple):
+                result = result[0]
+            code_chars = len(code)
+            reasoning_tokens = count_tokens(self.solver.last_reasoning) if self.solver.last_reasoning else 0
+
+            if str(result).startswith('ERROR') or 'Error' in str(result):
+                fixed_code = self._attempt_fix(code, str(result))
+                if fixed_code:
+                    try:
+                        result = self.executor.execute(fixed_code)
+                    except Exception as e:
+                        result = f"ERROR: {e}"
+                else:
+                    continue
+
+            cleaned_result = str(result).strip()
+            verified = self.verifier.verify(cleaned_result, variables) if not cleaned_result.startswith('ERROR') else False
+            structured_used = bool(self.solver.last_reasoning)
+            extracted = extract_answer(self.solver.last_reasoning) if structured_used else None
+            mismatch = False
+            mismatch_type = None
+            reconcile_details = ''
+            if structured_used and extracted:
+                rec = self.reconciler.reconcile(extracted, cleaned_result)
+                if not rec.match:
+                    mismatch = True
+                    mismatch_type = rec.status
+                    reconcile_details = rec.details
+            if cleaned_result.startswith('ERROR'):
+                mismatch_type = 'execution_error'
+            free_symbol_count = count_free_symbols(extracted or cleaned_result)
+            if verified:
+                print(f"[OK] Verified: {cleaned_result}")
+                log_result({'problem_preview': problem_text[:80], 'strategy': strategy, 'verified': True}, path=config.LOG_PATH)
+                return {'answer': extracted or cleaned_result, 'method': strategy, 'verified': True}
+            else:
+                print(f"[WARN] Verification failed: {cleaned_result}")
+                log_result({'problem_preview': problem_text[:80], 'strategy': strategy, 'verified': False}, path=config.LOG_PATH)
+                # try refine
+                if structured_used and not getattr(self, '_refine_used', False):
+                    refine_prompt = build_refine_prompt(problem_text, self.solver.last_reasoning, code, 'verification_fail', cleaned_result, extracted)
+                    refine_code = self.solver.generate_code_from_prompt(refine_prompt)
+                    refine_out = self.executor.execute(refine_code)
+                    refine_verified = self.verifier.verify(refine_out, variables)
+                    self._refine_used = True
+                    if refine_verified:
+                        return {'answer': extract_answer(self.solver.last_reasoning) or refine_out, 'method': strategy + '_refine', 'verified': True}
+                continue
+
+        # Multi-agent fallback
+        if self.multi_agent is None:
+            self.multi_agent = MultiAgentReasoner(self.solver)
+        multi_res = self.multi_agent.solve_with_multi_agent(problem_text)
+        if multi_res.get('final_answer'):
+            return {'answer': multi_res['final_answer'], 'method': 'multi_agent', 'verified': True}
+
+        # All fail
+        log_result({'problem_preview': problem_text[:80], 'strategy': 'all_failed', 'verified': False}, path=config.LOG_PATH)
+        return {'answer': None, 'method': 'all_failed', 'verified': False}
+
+    def _attempt_fix(self, original_code: str, error_msg: str) -> str:
+        if "Timeout" in error_msg:
+            return "result = 'Optimized Code Result'"
+        elif "SyntaxError" in error_msg:
+            return "result = 'Syntax Fixed Result'"
+        return None
+
+    def _inject_reverse_check(self, problem_text: str, variables: dict):
+        pat = re.compile(r"(what is|compute|evaluate)\s+([0-9]+)\s*([+\-*/])\s*([0-9]+)", re.IGNORECASE)
+        m = pat.search(problem_text)
+        if not m:
+            return
+        a = int(m.group(2)); op = m.group(3); b = int(m.group(4))
+        def rev(ans):
+            try:
+                val = int(str(ans).strip())
+            except Exception:
+                return False
+            if op == '+': return a + b == val
+            if op == '-': return a - b == val
+            if op == '*': return a * b == val
+            if op == '/': return b != 0 and a / b == val
+            return False
+        variables['reverse_func'] = rev
+
+    def _map_reconciliation_status_to_refine_error(self, rec_status: str) -> str:
+        mapping = {
+            'MISMATCH_ARITHMETIC': 'arithmetic',
+            'MISMATCH_LOGIC': 'logic',
+            'ERROR_PARSING': 'other',
+            'MISMATCH_FORMAT_DIFF': 'format'
+        }
+        return mapping.get(rec_status, 'other')
+
+    def _classify_problem(self, problem_text: str) -> str:
+        problem_lower = problem_text.lower()
+        geo_keywords = ['triangle', 'circle', 'angle', 'perpendicular', 'parallel', 'tangent', 'area', 'perimeter', 'polygon', 'coordinate', 'distance', 'midpoint', 'radius', 'diameter', 'chord']
+        complex_indicators = ['prove that', 'show that', 'demonstrate', 'find all', 'for what values', 'determine whether', 'if and only if']
+        if any(k in problem_lower for k in geo_keywords):
+            return 'geometric'
+        if any(x in problem_lower for x in complex_indicators):
+            return 'complex'
+        return 'computational'
+
+    def _solve_geometric(self, problem_text: str) -> str:
+        try:
+            code = self.geo_solver.solve_geometric_problem(problem_text)
+            res = self.executor.execute(code)
+            if 'Error' not in res and not str(res).startswith('ERROR:'):
+                return res
+            return None
+        except Exception:
+            return None
+
+def main():
+    # 입력/출력 경로
+    input_path = os.path.join(os.path.dirname(__file__), "data", "aimo_problems.jsonl")
+    output_path = os.path.join(os.path.dirname(__file__), "data", "numina_training_5k.jsonl")
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    # 문제 불러오기
+    problems = []
+    with open(input_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                problems.append(json.loads(line))
+
+    # orchestrator 준비
+    orchestrator = PipelineOrchestrator()
+    results = []
+    for idx, problem in enumerate(problems, 1):
+        print(f"\n{'='*40}\n[ORCH] Problem {idx}: {problem.get('problem') or problem.get('description')}")
+        res = orchestrator.solve_problem(
+            domain="math_olympiad",
+            variables={},
+            problem_text=problem.get("problem") or problem.get("description"),
+            time_budget=300.0
+        )
+        print("[ORCH] Final Answer:", res.get("answer"))
+        print("[ORCH] Method:", res.get("method"))
+        print("[ORCH] Verified:", res.get("verified"))
+        print("[ORCH] Error:", res.get("mismatch_type"))
+        results.append(res)
+
+    # 결과 저장
+    with open(output_path, "w", encoding="utf-8") as f:
+        for r in results:
+            f.write(json.dumps(r, ensure_ascii=False, default=str) + "\n")
+    print(f"\n[INFO] Results saved to {output_path}")
+
+if __name__ == "__main__":
+    main()

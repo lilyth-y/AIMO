@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../../Users/USER/Downloads/ai-mathematical-olympiad-progress-prize-3"
+		}
+	],
+	"settings": {
+		"git.ignoreLimitWarning": true,
+		"powershell.cwd": "AIMO"
+	}
+}

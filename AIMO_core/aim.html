@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIMO: Reasoning Engine Architecture</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+    <!-- Google Fonts (Inter & JetBrains Mono) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <!-- Palette: Cyber Intellectual -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0B1120;
+            color: #E2E8F0;
+        }
+        
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 320px;
+        }
+
+        /* Tech Card Styles */
+        .card-tech {
+            background: rgba(15, 23, 42, 0.6);
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+
+        /* AI Feature Styles */
+        .ai-terminal {
+            background-color: #09090b;
+            border: 1px solid #3f3f46;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .typing-cursor::after {
+            content: '▋';
+            animation: blink 1s step-end infinite;
+            color: #06b6d4;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+        
+        .btn-ai {
+            background: linear-gradient(90deg, #0e7490 0%, #1d4ed8 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-ai:hover {
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.2);
+            border-color: #22d3ee;
+        }
+
+        /* Status Indicators */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        .status-ok { background-color: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
+        .status-warn { background-color: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.4); }
+        .status-err { background-color: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    </style>
+</head>
+<body class="antialiased selection:bg-cyan-900 selection:text-white overflow-x-hidden">
+
+    <!-- Header -->
+    <header class="w-full py-10 px-6 border-b border-slate-800 bg-slate-900/50">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+            <div>
+                <div class="flex items-center gap-3 mb-2">
+                    <span class="px-2 py-1 text-[10px] font-mono font-bold text-cyan-400 border border-cyan-900 bg-cyan-950/30 rounded">AIMO KAGGLE</span>
+                    <span class="px-2 py-1 text-[10px] font-mono font-bold text-violet-400 border border-violet-900 bg-violet-950/30 rounded">SYSTEM DIAGNOSTICS</span>
+                </div>
+                <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-2">
+                    Reasoning Engine <span class="text-cyan-400">Architecture</span>
+                </h1>
+                <p class="text-slate-400 max-w-xl text-sm leading-relaxed">
+                    <strong>DeepSeek-Math</strong> & Tool-Integrated Reasoning<br>
+                    자연어 처리(NLP)와 Code Interpreter를 결합한 하이브리드 추론 모델.
+                </p>
+            </div>
+            
+            <!-- Quick Stats -->
+            <div class="flex gap-8 text-center border-l border-slate-700 pl-8">
+                <div>
+                    <div class="text-2xl font-mono font-bold text-white">4<span class="text-cyan-500 text-sm">bit</span></div>
+                    <div class="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Quantization</div>
+                </div>
+                <div>
+                    <div class="text-2xl font-mono font-bold text-white">7B</div>
+                    <div class="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Parameters</div>
+                </div>
+                <div>
+                    <div class="text-2xl font-mono font-bold text-white">AWQ</div>
+                    <div class="text-[10px] text-slate-500 uppercase tracking-widest mt-1">Kernel</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 md:grid-cols-12 gap-6">
+
+        <!-- GEMINI FEATURE: Live Reasoning Simulator with Code Check -->
+        <section class="md:col-span-12 card-tech rounded-xl p-1 border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.05)]">
+            <div class="bg-slate-900/90 rounded-lg p-6">
+                <div class="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                        Live Reasoning Simulator
+                        <span class="ml-2 text-[10px] font-mono text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded bg-cyan-950/30">GEMINI POWERED</span>
+                    </h2>
+                    
+                    <!-- Diagnostics Panel -->
+                    <div class="flex gap-4 text-xs font-mono">
+                        <div class="flex items-center text-slate-400">
+                            <span id="statusSyntax" class="status-dot bg-slate-600"></span>Syntax Check
+                        </div>
+                        <div class="flex items-center text-slate-400">
+                            <span id="statusLogic" class="status-dot bg-slate-600"></span>Logic Safety
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Input Area -->
+                    <div class="flex flex-col gap-4">
+                        <div class="text-xs text-slate-400 leading-relaxed bg-slate-950/50 p-3 rounded border border-slate-800">
+                            <strong class="text-cyan-400 block mb-1">SYSTEM INSTRUCTION</strong>
+                            수학 문제를 입력하면 DeepSeek-Math의 사고 과정(Chain of Thought)을 시뮬레이션합니다. 
+                            <strong>코드 무결성 검사</strong>가 포함되어 생성된 코드의 오류 가능성을 진단합니다.
+                        </div>
+                        <textarea id="simInput" class="w-full h-32 bg-black border border-slate-700 rounded p-4 text-slate-300 focus:outline-none focus:border-cyan-600 focus:ring-1 focus:ring-cyan-600 transition-all font-mono text-sm resize-none" placeholder="Enter a math problem... (e.g., Find the sum of all integers x such that 1 <= x <= 100)"></textarea>
+                        <button onclick="runSimulation()" class="btn-ai w-full py-2.5 rounded text-white font-bold text-xs tracking-widest flex justify-center items-center gap-2 border border-white/10">
+                            <span>INITIALIZE SIMULATION</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Output Terminal -->
+                    <div class="ai-terminal rounded p-0 overflow-hidden flex flex-col h-64 relative">
+                        <div class="bg-slate-800/80 px-3 py-1 flex justify-between items-center border-b border-slate-700">
+                            <span class="text-[10px] text-slate-400">TERMINAL OUTPUT</span>
+                            <div class="flex gap-1.5">
+                                <div class="w-2 h-2 rounded-full bg-slate-600"></div>
+                                <div class="w-2 h-2 rounded-full bg-slate-600"></div>
+                            </div>
+                        </div>
+                        <div id="simOutput" class="p-4 text-xs font-mono leading-relaxed whitespace-pre-wrap overflow-y-auto flex-grow text-slate-300">
+                            <span class="opacity-30">// Waiting for input stream...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Workflow Flowchart -->
+        <section class="md:col-span-12">
+            <h2 class="text-sm font-bold text-white mb-4 flex items-center gap-2 uppercase tracking-widest">
+                <span class="w-1 h-4 bg-cyan-600"></span>
+                Cognitive Workflow
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-900/30 p-6 rounded-xl border border-dashed border-slate-700">
+                <!-- Node 1 -->
+                <div class="bg-slate-800 border-t-2 border-cyan-500 p-4 rounded shadow-lg relative">
+                    <div class="text-[10px] text-cyan-400 font-mono mb-2 bg-cyan-950/30 inline-block px-1">STEP 01</div>
+                    <h3 class="text-sm font-bold text-white">Problem Parsing</h3>
+                    <p class="text-[10px] text-slate-400 mt-2">Natural Language Processing</p>
+                    <div class="hidden md:block absolute top-1/2 -right-2 w-4 h-px bg-slate-600"></div>
+                </div>
+
+                <!-- Node 2 -->
+                <div class="bg-slate-800 border-t-2 border-violet-500 p-4 rounded shadow-lg relative">
+                    <div class="text-[10px] text-violet-400 font-mono mb-2 bg-violet-950/30 inline-block px-1">STEP 02</div>
+                    <h3 class="text-sm font-bold text-white">Code Synthesis</h3>
+                    <p class="text-[10px] text-slate-400 mt-2">Python Generation</p>
+                    <div class="hidden md:block absolute top-1/2 -right-2 w-4 h-px bg-slate-600"></div>
+                </div>
+
+                <!-- Node 3 -->
+                <div class="bg-slate-800 border-t-2 border-pink-500 p-4 rounded shadow-lg relative">
+                    <div class="text-[10px] text-pink-400 font-mono mb-2 bg-pink-950/30 inline-block px-1">STEP 03</div>
+                    <h3 class="text-sm font-bold text-white">Execution</h3>
+                    <p class="text-[10px] text-slate-400 mt-2">Sandbox Runtime</p>
+                    <div class="hidden md:block absolute top-1/2 -right-2 w-4 h-px bg-slate-600"></div>
+                </div>
+
+                <!-- Node 4 -->
+                <div class="bg-slate-800 border-t-2 border-emerald-500 p-4 rounded shadow-lg">
+                    <div class="text-[10px] text-emerald-400 font-mono mb-2 bg-emerald-950/30 inline-block px-1">STEP 04</div>
+                    <h3 class="text-sm font-bold text-white">Validation</h3>
+                    <p class="text-[10px] text-slate-400 mt-2">Modulo Calculation</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Radar Chart -->
+        <section class="md:col-span-4 card-tech rounded-xl p-5 flex flex-col">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h3 class="text-xs font-bold text-cyan-300 uppercase tracking-widest mb-1">Domain Performance</h3>
+                    <p class="text-[10px] text-slate-500 font-mono">Accuracy Metrics</p>
+                </div>
+                <button onclick="analyzeRadar()" class="text-[9px] bg-slate-800 hover:bg-cyan-900 text-cyan-400 border border-cyan-700 px-2 py-1 rounded transition-colors uppercase tracking-wider">
+                    Run Analysis
+                </button>
+            </div>
+            <div class="chart-container flex-grow">
+                <canvas id="radarChart"></canvas>
+            </div>
+            <div id="radarInsight" class="hidden mt-3 pt-3 border-t border-slate-700/50 text-[10px] text-cyan-100 bg-cyan-950/10 p-2 rounded border-l-2 border-cyan-600">
+                <span class="typing-cursor">Processing data...</span>
+            </div>
+        </section>
+
+        <!-- Donut Chart -->
+        <section class="md:col-span-4 card-tech rounded-xl p-5 flex flex-col">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h3 class="text-xs font-bold text-violet-300 uppercase tracking-widest mb-1">Error Taxonomy</h3>
+                    <p class="text-[10px] text-slate-500 font-mono">Failure Modes</p>
+                </div>
+                <button onclick="analyzeDonut()" class="text-[9px] bg-slate-800 hover:bg-violet-900 text-violet-400 border border-violet-700 px-2 py-1 rounded transition-colors uppercase tracking-wider">
+                    Run Analysis
+                </button>
+            </div>
+            <div class="chart-container flex-grow">
+                <canvas id="donutChart"></canvas>
+            </div>
+            <div id="donutInsight" class="hidden mt-3 pt-3 border-t border-slate-700/50 text-[10px] text-violet-100 bg-violet-950/10 p-2 rounded border-l-2 border-violet-600">
+                <span class="typing-cursor">Processing data...</span>
+            </div>
+        </section>
+
+        <!-- Bar Chart -->
+        <section class="md:col-span-4 card-tech rounded-xl p-5">
+            <h3 class="text-xs font-bold text-pink-300 uppercase tracking-widest mb-1">VRAM Optimization</h3>
+            <p class="text-[10px] text-slate-500 mb-4 font-mono">Resource Utilization</p>
+            <div class="chart-container">
+                <canvas id="barChart"></canvas>
+            </div>
+             <div class="mt-4 pt-4 border-t border-slate-700/50">
+                <p class="text-[10px] text-slate-400">
+                    <span class="text-pink-400 font-bold">4-bit AWQ</span> reduces VRAM usage by 60% compared to FP16, enabling efficient inference on limited hardware.
+                </p>
+            </div>
+        </section>
+
+        <!-- Plotly 3D -->
+        <section class="md:col-span-12 card-tech rounded-xl overflow-hidden relative border border-slate-700">
+            <div class="absolute top-4 left-4 z-10 pointer-events-none bg-slate-950/80 px-3 py-2 rounded backdrop-blur-sm border border-slate-800">
+                <h3 class="text-sm font-bold text-white">Solution Search Space</h3>
+                <p class="text-[10px] text-slate-400 mt-1">Difficulty vs. Complexity vs. Success Probability</p>
+            </div>
+            <div id="plotlyChart" class="w-full h-[450px] bg-slate-900"></div>
+        </section>
+
+    </main>
+
+    <footer class="text-center py-8 text-slate-600 text-[10px] border-t border-slate-800 bg-[#0B1120]">
+        <p class="font-mono">GENERATED FROM NOTEBOOK TELEMETRY DATA</p>
+        <p class="mt-1 opacity-50">POWERED BY GOOGLE GEMINI API</p>
+    </footer>
+
+    <!-- Script Block -->
+    <script>
+        // --- API CONFIG ---
+        const apiKey = ""; // Runtime Environment Key
+
+        async function callGemini(prompt, systemInstruction = "") {
+            if (!apiKey) {
+                console.error("API Key missing");
+                return "Error: API Key is not available.";
+            }
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: systemInstruction }] }
+            };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                return data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
+            } catch (error) {
+                console.error("API Error:", error);
+                return "Error communicating with Gemini API.";
+            }
+        }
+
+        // --- SIMULATOR WITH CODE CHECK ---
+        async function runSimulation() {
+            const input = document.getElementById('simInput').value;
+            if (!input) {
+                alert("Please enter a problem statement.");
+                return;
+            }
+
+            // Reset Status Indicators
+            document.getElementById('statusSyntax').className = 'status-dot bg-slate-600';
+            document.getElementById('statusLogic').className = 'status-dot bg-slate-600';
+
+            const outputDiv = document.getElementById('simOutput');
+            outputDiv.innerHTML = '<span class="typing-cursor text-cyan-400">Initializing Reasoning Engine...</span>';
+
+            const systemPrompt = `You are the 'DeepSeek-Math' engine. Demonstrate Tool-Integrated Reasoning.
+            Format output as a terminal log.
+            Crucially, include a [DIAGNOSTICS] section that evaluates the generated Python code for syntax and infinite loop risks.
+            
+            Structure:
+            [SYSTEM] Booting Math_Interpreter...
+            [INPUT] Parsing data...
+            [THOUGHT] <Brief Strategy>
+            [CODE_GEN] Generating Python script...
+            \`\`\`python
+            # Code snippet
+            \`\`\`
+            [DIAGNOSTICS] Checking code integrity...
+            > Syntax: <Valid/Invalid>
+            > Logic Risk: <Low/Medium/High>
+            [EXEC] Running in sandbox...
+            [RESULT] <Output>
+            [FINAL] Answer: <Modulo 1000 result>
+            
+            Use Korean for explanations, English for logs/code. No emojis.`;
+
+            const result = await callGemini(input, systemPrompt);
+            
+            // Update Status based on result text (Simple keyword check simulation)
+            setTimeout(() => {
+                if (result.includes("Syntax: Valid")) {
+                    document.getElementById('statusSyntax').className = 'status-dot status-ok';
+                } else {
+                    document.getElementById('statusSyntax').className = 'status-dot status-err';
+                }
+                
+                if (result.includes("Logic Risk: Low")) {
+                    document.getElementById('statusLogic').className = 'status-dot status-ok';
+                } else {
+                    document.getElementById('statusLogic').className = 'status-dot status-warn';
+                }
+            }, 2000); // Slight delay for effect
+
+            outputDiv.innerHTML = "";
+            let i = 0;
+            const speed = 5;
+            function typeWriter() {
+                if (i < result.length) {
+                    const char = result.charAt(i);
+                    outputDiv.innerHTML += char === '\n' ? '<br>' : char;
+                    outputDiv.scrollTop = outputDiv.scrollHeight;
+                    i++;
+                    setTimeout(typeWriter, speed);
+                } else {
+                    outputDiv.innerHTML += '<br><span class="text-cyan-400">root@aimo-engine:~$ _</span>';
+                }
+            }
+            typeWriter();
+        }
+
+        // --- ANALYZE FUNCTIONS ---
+        async function analyzeRadar() {
+            const insightBox = document.getElementById('radarInsight');
+            insightBox.classList.remove('hidden');
+            insightBox.innerHTML = '<span class="typing-cursor">Connecting to Gemini...</span>';
+
+            const prompt = `Analyze: Algebra 88, Number Theory 94, Combinatorics 76, Geometry 58. 
+            Provide 1 strategic sentence in Korean about model strengths. No emojis.`;
+            const result = await callGemini("Radar Data", prompt);
+            insightBox.innerText = result;
+        }
+
+        async function analyzeDonut() {
+            const insightBox = document.getElementById('donutInsight');
+            insightBox.classList.remove('hidden');
+            insightBox.innerHTML = '<span class="typing-cursor">Connecting to Gemini...</span>';
+
+            const prompt = `Analyze: Timeout 38%, Wrong Answer 42%. 
+            Provide 1 technical sentence in Korean about optimization. No emojis.`;
+            const result = await callGemini("Error Data", prompt);
+            insightBox.innerText = result;
+        }
+
+        // --- CHART JS CONFIG ---
+        // Utility: Wrap labels > 15 chars
+        function processLabels(labels) {
+            return labels.map(label => {
+                if (label.length > 15) {
+                    const words = label.split(' ');
+                    const lines = [];
+                    let currentLine = words[0];
+                    for (let i = 1; i < words.length; i++) {
+                        if ((currentLine + " " + words[i]).length < 15) lines.push(currentLine += " " + words[i]);
+                        else { lines.push(currentLine); currentLine = words[i]; }
+                    }
+                    lines.push(currentLine);
+                    return lines;
+                }
+                return label;
+            });
+        }
+
+        Chart.defaults.color = '#64748b';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        Chart.defaults.borderColor = '#1e293b';
+
+        const commonTooltip = {
+            backgroundColor: '#0f172a',
+            titleColor: '#f8fafc',
+            bodyColor: '#cbd5e1',
+            borderColor: '#334155',
+            borderWidth: 1,
+            padding: 8,
+            cornerRadius: 4,
+            callbacks: {
+                title: function(items) {
+                    const label = items[0].chart.data.labels[items[0].dataIndex];
+                    return Array.isArray(label) ? label.join(' ') : label;
+                }
+            }
+        };
+
+        // Render Charts
+        new Chart(document.getElementById('radarChart'), {
+            type: 'radar',
+            data: {
+                labels: ['Algebra', 'Number Theory', 'Combinatorics', 'Geometry', 'Probability'],
+                datasets: [{
+                    label: 'Score', data: [88, 94, 76, 58, 72],
+                    backgroundColor: 'rgba(6, 182, 212, 0.2)', borderColor: '#06b6d4', borderWidth: 2,
+                    pointBackgroundColor: '#06b6d4'
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { r: { grid: { color: '#1e293b' }, ticks: { display: false } } }, plugins: { legend: { display: false }, tooltip: commonTooltip } }
+        });
+
+        new Chart(document.getElementById('donutChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Timeout', 'Wrong Answer', 'Syntax Error', 'Runtime'],
+                datasets: [{ data: [38, 42, 8, 12], backgroundColor: ['#ec4899', '#8b5cf6', '#06b6d4', '#475569'], borderWidth: 0 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 6 } }, tooltip: commonTooltip } }
+        });
+
+        new Chart(document.getElementById('barChart'), {
+            type: 'bar',
+            data: {
+                labels: ['FP16', '8-bit', '4-bit AWQ'],
+                datasets: [{ label: 'VRAM (GB)', data: [14.5, 8.2, 5.8], backgroundColor: ['#334155', '#475569', '#ec4899'], borderRadius: 2 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { grid: { color: '#1e293b' } }, x: { grid: { display: false } } }, plugins: { legend: { display: false }, tooltip: commonTooltip } }
+        });
+
+        // Plotly 3D Surface
+        const zData = [];
+        for (let i = 0; i < 25; i++) {
+            const row = [];
+            for (let j = 0; j < 25; j++) {
+                row.push((Math.sin(i/5) * Math.cos(j/5) * 50 + 50) * (1 - (i+j)/62.5));
+            }
+            zData.push(row);
+        }
+        Plotly.newPlot('plotlyChart', [{
+            z: zData, type: 'surface', colorscale: [[0, '#0f172a'], [1, '#06b6d4']], showscale: false,
+            contours: { z: { show: true, usecolormap: true, highlightcolor: "#fff", project: { z: true } } }
+        }], {
+            margin: { l: 0, r: 0, b: 0, t: 0 }, paper_bgcolor: 'rgba(0,0,0,0)',
+            scene: { xaxis: { title: 'Complexity' }, yaxis: { title: 'Difficulty' }, zaxis: { title: 'Prob' }, bgcolor: 'rgba(0,0,0,0)' }
+        }, { responsive: true, displayModeBar: false });
+
+    </script>
+</body>
+</html>
