@@ -38,3 +38,9 @@ evaluation_output.txt
 !generated_queries.json
 logs/
 results/
+
+# Cache and model files
+.cache/
+*.safetensors
+*.bin
+models/
