@@ -5,7 +5,11 @@ Problem Decomposition Module
 - Synthesizes final answer from sub-solutions
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .solver import Solver
+    from .executor import CodeExecutor
 import re
 
 class SubProblem:
@@ -77,7 +81,7 @@ Make sure to:
         response = self.llm.generate(decomposition_prompt)
         return self._parse_subproblems(response)
     
-    def solve_hierarchically(self, problem_text: str, solver, executor) -> Any:
+    def solve_hierarchically(self, problem_text: str, solver: 'Solver', executor: 'CodeExecutor') -> Any:
         """
         Solve problem by decomposing and solving sub-problems in order.
         NOW EXECUTES CODE AND PASSES ACTUAL RESULTS AS CONTEXT!

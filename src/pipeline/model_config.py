@@ -55,7 +55,7 @@ MODELS = {
 
 # Default model selection
 import os
-DEFAULT_MODEL = os.getenv("AIMO_MODEL", "qwen-1.5b")
+DEFAULT_MODEL = os.getenv("OMI_MODEL", "qwen-1.5b")
 
 def get_model_config(model_key=None):
     """Get model configuration"""

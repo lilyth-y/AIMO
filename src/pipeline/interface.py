@@ -9,17 +9,32 @@ import pandas as pd
 import polars as pl
 from typing import Any
 
-# Add parent directory to path to import modules if needed
-sys.path.append("..")
+# Note: sys.path manipulation is generally not recommended
+# Consider using proper package structure instead
 
 from .orchestrator import PipelineOrchestrator
 from .stage1_labeling import ProblemAnalyzer
+from .logger import get_logger
+
+logger = get_logger()
 
 class AIMOInterface:
-    def __init__(self):
+    """
+    AIMO 3 Gateway Interface
+    
+    Kaggle Gateway와 Pipeline Orchestrator 간의 통신을 처리합니다.
+    DataFrame과 Dict 간의 데이터 변환을 관리합니다.
+    """
+    
+    def __init__(self) -> None:
+        """
+        AIMOInterface 초기화
+        
+        Orchestrator와 ProblemAnalyzer를 초기화합니다.
+        """
         self.orchestrator = PipelineOrchestrator()
         self.analyzer = ProblemAnalyzer()
-        self.total_problems = 50 # Estimated, usually 50 for AIMO
+        self.total_problems = 50  # Estimated, usually 50 for AIMO
         self.solved_count = 0
 
     def predict(self, id_series: pl.Series, problem_series: pl.Series) -> pl.DataFrame:
@@ -34,10 +49,10 @@ class AIMOInterface:
             problem_id = id_series.item(0)
             problem_text = problem_series.item(0)
         except Exception as e:
-            print(f"Error extracting data from series: {e}")
+            logger.error(f"Error extracting data from series: {e}")
             return pl.DataFrame({'answer': [0]})
 
-        print(f"\n[Interface] Received Problem ID: {problem_id}")
+        logger.info(f"Received Problem ID: {problem_id}")
         
         # 2. Analyze Problem (Stage 1)
         # We do this here to pass structured info to Orchestrator
@@ -51,7 +66,12 @@ class AIMOInterface:
         # time_budget = calculate_budget(remaining) 
         
         # 4. Delegate to Orchestrator
-        answer = self.orchestrator.solve_problem(domain, variables, problem_text)
+        try:
+            result = self.orchestrator.solve_problem(domain, variables, problem_text)
+            answer = result.get('answer') if isinstance(result, dict) else result
+        except Exception as e:
+            logger.error(f"Error in orchestrator: {e}", exc_info=True)
+            answer = None
         
         # 5. Fallback for absolute failure (should be rare)
         if answer is None:

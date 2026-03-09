@@ -8,23 +8,82 @@ import re
 from typing import Dict, Any
 
 class ProblemAnalyzer:
+    """
+    문제 분석기
+    
+    문제를 도메인으로 분류하고 변수를 추출합니다.
+    향후 BERT 분류기나 LLM 프롬프트로 확장 가능합니다.
+    """
+    
     def __init__(self):
+        """
+        ProblemAnalyzer 초기화
+        
+        향후 BERT 분류기나 LLM 프롬프트를 로드할 수 있습니다.
+        """
         # Placeholder for BERT classifier or LLM prompt
         pass
 
     def classify_domain(self, problem_text: str) -> str:
         """
-        Classifies the problem into a domain.
+        문제를 도메인으로 분류합니다.
+        
+        Args:
+            problem_text: 문제 텍스트
+        
+        Returns:
+            도메인 이름 (Geometry, Number Theory, Algebra, Combinatorics, 등)
         """
-        # Simple keyword based classification for demo
-        if "triangle" in problem_text or "circle" in problem_text:
+        problem_lower = problem_text.lower()
+        
+        # Geometry keywords
+        geo_keywords = [
+            'triangle', 'circle', 'angle', 'perpendicular', 'parallel',
+            'tangent', 'area', 'perimeter', 'polygon', 'coordinate',
+            'distance', 'midpoint', 'radius', 'diameter', 'chord',
+            'rectangle', 'square', 'trapezoid', 'rhombus'
+        ]
+        
+        # Number Theory keywords
+        nt_keywords = [
+            'mod', 'prime', 'gcd', 'lcm', 'divisible', 'integer',
+            'factor', 'congruence', 'diophantine', 'modular',
+            'remainder', 'divided by', 'divisor', 'multiple'
+        ]
+        
+        # Algebra keywords
+        alg_keywords = [
+            'polynomial', 'equation', 'quadratic', 'cubic', 'root',
+            'factor', 'expand', 'simplify', 'inequality', 'matrix'
+        ]
+        
+        # Combinatorics keywords
+        comb_keywords = [
+            'permutation', 'combination', 'arrangement', 'count',
+            'choose', 'binomial', 'pigeonhole', 'graph', 'tree',
+            'ways to', 'how many ways', 'arrange', 'select'
+        ]
+        
+        # Calculus keywords
+        calc_keywords = [
+            'limit', 'derivative', 'integral', 'series', 'converge',
+            'diverge', 'taylor', 'optimization', 'f(x)', 'function',
+            'differentiate', 'integrate', 'critical point'
+        ]
+        
+        # Check each domain
+        if any(kw in problem_lower for kw in geo_keywords):
             return "Geometry"
-        elif "mod" in problem_text or "prime" in problem_text:
+        elif any(kw in problem_lower for kw in nt_keywords):
             return "Number Theory"
-        elif "polynomial" in problem_text:
+        elif any(kw in problem_lower for kw in alg_keywords):
             return "Algebra"
-        else:
+        elif any(kw in problem_lower for kw in comb_keywords):
             return "Combinatorics"
+        elif any(kw in problem_lower for kw in calc_keywords):
+            return "Calculus"
+        else:
+            return "General"
 
     def extract_variables(self, problem_text: str) -> Dict[str, Any]:
         """
@@ -41,5 +100,6 @@ class ProblemAnalyzer:
 if __name__ == "__main__":
     analyzer = ProblemAnalyzer()
     text = "Find the number of integers N such that N < 1000 and N is prime."
-    print(f"Domain: {analyzer.classify_domain(text)}")
-    print(f"Variables: {analyzer.extract_variables(text)}")
+    # Example usage (commented out for production)
+    # print(f"Domain: {analyzer.classify_domain(text)}")
+    # print(f"Variables: {analyzer.extract_variables(text)}")

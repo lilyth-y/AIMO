@@ -28,22 +28,15 @@ Orchestrator
 
 
 
-import time
-
-
-
-
+import os
 from typing import Dict, Any
-
-
-
 
 from . import config
 
 
 
 
-from .reasoning_utils import extract_answer, extract_final_answer_from_output, log_result, make_ids, build_refine_prompt, canonicalize_expression, count_free_symbols, count_tokens, assess_complexity
+from .reasoning_utils import extract_answer, extract_final_answer_from_output, normalize_multi_agent_answer, log_result, make_ids, build_refine_prompt, count_free_symbols, count_tokens, assess_complexity
 
 
 
@@ -104,6 +97,18 @@ from .hybrid_reasoning_engine import HybridReasoningEngine
 
 
 from .multi_agent_reasoner import MultiAgentReasoner
+from .refine_loop import create_refine_loop
+
+from .orchestrator_helpers import (
+    classify_problem,
+    inject_reverse_check,
+    attempt_code_fix,
+    build_fix_code_prompt,
+    map_reconciliation_status_to_refine_error,
+)
+from .logger import get_logger
+
+logger = get_logger()
 
 
 
@@ -153,42 +158,19 @@ tracer = trace.get_tracer(__name__)
 
 
 
-# Configure OTLP exporter
-
-
-
-
-otlp_exporter = OTLPSpanExporter(endpoint="http://localhost:4317", insecure=True)
-
-
-
-
-span_processor = BatchSpanProcessor(otlp_exporter)
-
-
-
-
-trace.get_tracer_provider().add_span_processor(span_processor)
-
-
-
-
-
-
-
-
-
-# Optional: Console exporter for debugging
-
-
-
-
-console_exporter = ConsoleSpanExporter()
-
-
-
-
-trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(console_exporter))
+# OTLP: only when OMI_OTLP_TRACING=1 (avoids localhost:4317 connection errors)
+if os.environ.get("OMI_OTLP_TRACING", "").lower() in ("1", "true", "yes"):
+    try:
+        otlp_exporter = OTLPSpanExporter(endpoint="http://localhost:4317", insecure=True)
+        trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(otlp_exporter))
+    except Exception as e:
+        get_logger().debug("OTLP tracing disabled: %s", e)
+# Console exporter only when OMI_CONSOLE_TRACING=1
+if os.environ.get("OMI_CONSOLE_TRACING", "").lower() in ("1", "true", "yes"):
+    try:
+        trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
+    except Exception:
+        pass
 
 
 
@@ -250,8 +232,7 @@ class PipelineOrchestrator:
 
             self.hybrid_engine = HybridReasoningEngine(self.solver, self.executor)
 
-
-
+            self.refine_loop = create_refine_loop(max_iterations=1, enable_loop=True)  # Single retry per strategy
 
             self.multi_agent = None  # Lazy initialize
 
@@ -263,7 +244,7 @@ class PipelineOrchestrator:
 
 
 
-    def solve_problem(self, domain: str, variables: Dict[str, Any], problem_text: str, time_budget: float = 60.0):
+    def solve_problem(self, domain: str, variables: Dict[str, Any], problem_text: str, time_budget: float = 60.0) -> Dict[str, Any]:
 
 
 
@@ -318,7 +299,7 @@ class PipelineOrchestrator:
 
 
 
-            print(f"--- Solving Problem (run={ids['run_id']}, N={variables.get('N')}) [Budget: {time_budget}s] ---")
+            logger.info(f"Solving Problem (run={ids['run_id']}, N={variables.get('N')}) [Budget: {time_budget}s]")
 
 
 
@@ -348,7 +329,7 @@ class PipelineOrchestrator:
 
 
 
-                print(f"[INTUITION] Instant classification: {problem_type_intuition} -> priority {preferred_strategy}")
+                logger.info(f"Instant classification: {problem_type_intuition} -> priority {preferred_strategy}")
 
 
 
@@ -363,7 +344,7 @@ class PipelineOrchestrator:
 
 
 
-            problem_type = self._classify_problem(problem_text)
+            problem_type = classify_problem(problem_text)
 
 
 
@@ -383,7 +364,7 @@ class PipelineOrchestrator:
 
 
 
-            print(f"[Complexity Analysis] Score: {complexity_score}, Type: {problem_type}, Threshold: {decomposition_threshold}, Decompose: {should_decompose}")
+            logger.debug(f"Complexity Analysis: Score={complexity_score}, Type={problem_type}, Threshold={decomposition_threshold}, Decompose={should_decompose}")
 
 
 
@@ -398,7 +379,7 @@ class PipelineOrchestrator:
 
 
 
-            self._inject_reverse_check(problem_text, variables)
+            inject_reverse_check(problem_text, variables)
 
 
 
@@ -488,7 +469,7 @@ class PipelineOrchestrator:
 
 
 
-                print("[Special Handler] Compromise Point activated - decomposing based on complexity threshold")
+                logger.info("Compromise Point activated - decomposing based on complexity threshold")
 
 
 
@@ -508,7 +489,7 @@ class PipelineOrchestrator:
 
 
 
-                    print("[Using Hybrid Reasoning Engine with Graph Decomposition]")
+                    logger.info("Using Hybrid Reasoning Engine with Graph Decomposition")
 
 
 
@@ -563,7 +544,7 @@ class PipelineOrchestrator:
 
 
 
-                            print("[Hybrid Engine failed, falling back to hierarchical solver]")
+                            logger.warning("Hybrid Engine failed, falling back to hierarchical solver")
 
 
 
@@ -608,7 +589,7 @@ class PipelineOrchestrator:
 
 
 
-                        print(f"[Hybrid Engine error: {str(e)}]")
+                        logger.error(f"Hybrid Engine error: {str(e)}", exc_info=True)
 
 
 
@@ -678,7 +659,7 @@ class PipelineOrchestrator:
 
 
 
-            print(f"1. Strategic Plan (adaptive): {strategies}")
+            logger.info(f"Strategic Plan (adaptive): {strategies}")
 
 
 
@@ -748,7 +729,7 @@ class PipelineOrchestrator:
 
 
 
-                    print(f"\n[Attempt {attempt}] Skipping {strategy} (previous timeout)")
+                    logger.debug(f"Attempt {attempt}: Skipping {strategy} (previous timeout)")
 
 
 
@@ -763,7 +744,7 @@ class PipelineOrchestrator:
 
 
 
-                print(f"\n[Attempt {attempt}] Trying Strategy: {strategy}")
+                logger.info(f"Attempt {attempt}: Trying Strategy: {strategy}")
 
 
 
@@ -798,7 +779,7 @@ class PipelineOrchestrator:
 
 
 
-                    print(f"   -> Generated {len(candidates)} candidate codes")
+                    logger.debug(f"Generated {len(candidates)} candidate codes")
 
 
 
@@ -858,17 +839,12 @@ class PipelineOrchestrator:
 
 
 
-                        # Ensure cand_result is a string
+                        # Convert cand_result to string
 
 
 
 
-                        if not isinstance(cand_result, str):
-
-
-
-
-                            cand_result = str(cand_result)
+                        cand_result = str(cand_result)
 
 
 
@@ -908,7 +884,7 @@ class PipelineOrchestrator:
 
 
 
-                            print(f"   -> [OK] Candidate {idx+1} verified; selecting.")
+                            logger.info(f"Candidate {idx+1} verified; selecting.")
 
 
 
@@ -923,7 +899,7 @@ class PipelineOrchestrator:
 
 
 
-                            print(f"   -> Candidate {idx+1} failed; trying next...")
+                            logger.debug(f"Candidate {idx+1} failed; trying next...")
 
 
 
@@ -993,7 +969,7 @@ class PipelineOrchestrator:
 
 
 
-                        print(f"   -> [WARNING] Generation timed out, trying next strategy...")
+                        logger.warning("Generation timed out, trying next strategy...")
 
 
 
@@ -1013,7 +989,7 @@ class PipelineOrchestrator:
 
 
 
-                    print(f"   -> Generated Code ({len(code)} chars)")
+                    logger.debug(f"Generated Code ({len(code)} chars)")
 
 
 
@@ -1083,12 +1059,12 @@ class PipelineOrchestrator:
 
 
 
-                if "Error" in result:
+                if result and "Error" in result:
 
 
 
 
-                    print(f"   -> [FAIL] Execution Failed: {result.strip()}")
+                    logger.warning(f"Execution Failed: {result.strip()}")
 
 
 
@@ -1103,17 +1079,16 @@ class PipelineOrchestrator:
 
 
 
-                    print("   -> [INFO] Analyzing Traceback (Self-Correction)...")
+                    logger.info("Analyzing Traceback (Self-Correction)...")
 
-
-
-
-                    fixed_code = self._attempt_fix(code, result)
-
-
-
-
-                    
+                    fixed_code = attempt_code_fix(code, result) if (result and code) else None
+                    if fixed_code is None and result and code and "Error:" in result:
+                        fix_prompt = build_fix_code_prompt(code, result)
+                        if fix_prompt:
+                            try:
+                                fixed_code = self.solver.generate_code_from_prompt(fix_prompt)
+                            except Exception:
+                                fixed_code = None
 
 
 
@@ -1123,7 +1098,7 @@ class PipelineOrchestrator:
 
 
 
-                        print("   -> [INFO] Retrying with Fixed Code...")
+                        logger.info("Retrying with Fixed Code...")
 
 
 
@@ -1158,7 +1133,7 @@ class PipelineOrchestrator:
 
 
 
-                            print(f"   -> [OK] Fix Successful! Result: {result.strip()}")
+                            logger.info(f"Fix Successful! Result: {result.strip()}")
 
 
 
@@ -1168,12 +1143,12 @@ class PipelineOrchestrator:
 
 
 
-                            print(f"   -> [FAIL] Fix Failed again: {result.strip()}")
+                            logger.warning(f"Fix Failed again: {result.strip()}")
 
 
 
 
-                            print("   -> [WARNING] Triggering Fallback Strategy...")
+                            logger.warning("Triggering Fallback Strategy...")
 
 
 
@@ -1188,7 +1163,7 @@ class PipelineOrchestrator:
 
 
 
-                        print("   -> [WARNING] Triggering Fallback Strategy...")
+                        logger.warning("Triggering Fallback Strategy...")
 
 
 
@@ -1208,7 +1183,7 @@ class PipelineOrchestrator:
 
 
 
-                print("   -> Verifying Answer...")
+                logger.debug("Verifying Answer...")
 
 
 
@@ -1266,10 +1241,7 @@ class PipelineOrchestrator:
 
                 complexity_score = getattr(self.solver, 'last_complexity_score', None)
 
-
-
-
-                extracted = extract_answer(self.solver.last_reasoning) if structured_used else None
+                extracted = extract_answer(self.solver.last_reasoning) if (structured_used and self.solver.last_reasoning) else None
 
 
 
@@ -1379,7 +1351,7 @@ class PipelineOrchestrator:
 
 
 
-                    print(f"   -> [OK] Success! Verified Result: {cleaned_result}")
+                    logger.info(f"Success! Verified Result: {cleaned_result}")
 
 
 
@@ -1539,12 +1511,16 @@ class PipelineOrchestrator:
 
 
 
+                    # 실행 결과가 유효하면 우선 사용(긴 추론에서 잘못된 "마지막 숫자" 방지)
+                    execution_ok = cleaned_result and not cleaned_result.startswith("ERROR:")
+                    final_answer = (cleaned_result if execution_ok else extracted) or cleaned_result or extracted
+
                     return {
 
 
 
 
-                        'answer': extracted or extract_final_answer_from_output(result),
+                        'answer': final_answer,
 
 
 
@@ -1649,12 +1625,9 @@ class PipelineOrchestrator:
 
 
 
-                    print("   -> [WARNING] Verification Failed. Triggering Fallback Strategy...")
+                    logger.warning("Verification Failed. Triggering Fallback Strategy...")
 
-
-
-
-                    # self-refine single attempt if structured reasoning present
+                    # Self-Refine Loop: Use RefineLoop module for cleaner code
 
 
 
@@ -1669,7 +1642,7 @@ class PipelineOrchestrator:
 
 
 
-                        refine_error_type = self._map_reconciliation_status_to_refine_error(mismatch_type) if mismatch_type else ('verification_fail' if not verified else 'mismatch')
+                        refine_error_type = map_reconciliation_status_to_refine_error(mismatch_type) if mismatch_type else ('verification_fail' if not verified else 'mismatch')
 
 
 
@@ -1684,7 +1657,7 @@ class PipelineOrchestrator:
 
 
 
-                        print("   -> [INFO] Self-Refine Attempt...")
+                        logger.info("Self-Refine Attempt...")
 
 
 
@@ -1734,7 +1707,7 @@ class PipelineOrchestrator:
 
 
 
-                        refine_extracted = extract_answer(self.solver.last_reasoning)
+                        refine_extracted = extract_answer(self.solver.last_reasoning) if self.solver.last_reasoning else None
 
 
 
@@ -2009,7 +1982,7 @@ class PipelineOrchestrator:
 
 
 
-                        'attempt': attempt,
+                        'attempt': attempt if 'attempt' in locals() else 1,
 
 
 
@@ -2094,7 +2067,7 @@ class PipelineOrchestrator:
 
 
 
-            print("\n[FAIL] All strategies failed.")
+            logger.error("All strategies failed.")
 
 
 
@@ -2121,15 +2094,11 @@ class PipelineOrchestrator:
 
             multi_result = self.multi_agent.solve_with_multi_agent(problem_text)
 
+            # Normalize: dict(role/content) -> content에서 숫자 추출
+            final_answer = normalize_multi_agent_answer(multi_result.get('final_answer'))
 
-
-
-            if multi_result.get('final_answer'):
-
-
-
-
-                print(f"[MULTI-AGENT] Success! Answer: {multi_result['final_answer']}")
+            if final_answer:
+                logger.info(f"MULTI-AGENT Success! Answer: {final_answer}")
 
 
 
@@ -2156,13 +2125,7 @@ class PipelineOrchestrator:
 
                     'complexity_score': None,
 
-
-
-
-                    'extracted_answer': multi_result['final_answer'],
-
-
-
+                    'extracted_answer': final_answer,
 
                     'execution_result': 'multi_agent_result',
 
@@ -2221,13 +2184,7 @@ class PipelineOrchestrator:
 
                 return {
 
-
-
-
-                    'answer': multi_result['final_answer'],
-
-
-
+                    'answer': final_answer,
 
                     'method': 'multi_agent',
 
@@ -2249,10 +2206,7 @@ class PipelineOrchestrator:
 
 
 
-                    'extracted_answer': multi_result['final_answer'],
-
-
-
+                    'extracted_answer': final_answer,
 
                     'verified': True,
 
@@ -2339,7 +2293,7 @@ class PipelineOrchestrator:
 
 
 
-                'attempt': attempt,
+                'attempt': 1,
 
 
 
@@ -2457,107 +2411,7 @@ class PipelineOrchestrator:
             }
 
 
-
-
-
-
-
-
-
-    def _classify_mismatch(self, extracted: str, executed: str) -> str:
-
-
-
-
-        # Deprecated but kept for backward compatibility if needed
-
-
-
-
-        try:
-
-
-
-
-            ex_val = float(extracted); exec_val = float(executed)
-
-
-
-
-            if abs(ex_val - exec_val) < 1e-9:
-
-
-
-
-                return 'format'
-
-
-
-
-            return 'arithmetic'
-
-
-
-
-        except Exception:
-
-
-
-
-            pass
-
-
-
-
-        try:
-
-
-
-
-            import sympy as sp
-
-
-
-
-            ex_expr = sp.sympify(extracted); exec_expr = sp.sympify(executed)
-
-
-
-
-            if sp.simplify(ex_expr - exec_expr) == 0:
-
-
-
-
-                return 'format'
-
-
-
-
-            return 'logic'
-
-
-
-
-        except Exception:
-
-
-
-
-            return 'other'
-
-
-
-
-
-
-
-
-
     def _inject_reverse_check(self, problem_text: str, variables: Dict[str, Any]):
-
-
-
 
         import re
 
@@ -2589,7 +2443,7 @@ class PipelineOrchestrator:
 
 
 
-        def rev(ans):
+        def rev(ans: Any) -> bool:
 
 
 
@@ -2724,7 +2578,7 @@ class PipelineOrchestrator:
 
 
 
-        return None
+        return None  # type: ignore[return-value]
 
 
 
@@ -2954,7 +2808,7 @@ class PipelineOrchestrator:
 
 
 
-            print(f"   -> Generated Geometric Code ({len(code)} chars)")
+            logger.debug(f"Generated Geometric Code ({len(code)} chars)")
 
 
 
@@ -2979,7 +2833,7 @@ class PipelineOrchestrator:
 
 
 
-                print(f"   -> [OK] Geometric Solution: {result.strip()}")
+                logger.info(f"Geometric Solution: {result.strip()}")
 
 
 
@@ -2994,17 +2848,17 @@ class PipelineOrchestrator:
 
 
 
-                print(f"   -> [FAIL] Geometric solver failed: {result.strip()}")
+                logger.warning(f"Geometric solver failed: {result.strip()}")
 
 
 
 
-                print("   -> Falling back to standard pipeline...")
+                logger.info("Falling back to standard pipeline...")
 
 
 
 
-                return None
+                return None  # type: ignore[return-value]
 
 
 
@@ -3014,17 +2868,17 @@ class PipelineOrchestrator:
 
 
 
-            print(f"   -> [ERROR] Geometric solver error: {str(e)}")
+            logger.error(f"Geometric solver error: {str(e)}", exc_info=True)
 
 
 
 
-            print("   -> Falling back to standard pipeline...")
+            logger.info("Falling back to standard pipeline...")
 
 
 
 
-            return None
+            return None  # type: ignore[return-value]
 
 
 
@@ -3069,7 +2923,8 @@ if __name__ == "__main__":
 
 
 
-    print("\n" + "="*30 + "\n")
+    # Example usage (commented out for production)
+    # logger.info("="*30)
 
 
 

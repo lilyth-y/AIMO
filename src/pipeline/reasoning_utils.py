@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 import os
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 
 try:
     import sympy as sp
@@ -97,48 +97,207 @@ def build_structured_prompt(problem: str) -> str:
     )
 
 ANS_REGEX = re.compile(r"<ANS>(.*?)</ANS>", re.DOTALL)
+BOXED_REGEX = re.compile(r"\\boxed\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}", re.DOTALL)
+# Last number on a line or "answer is X" / "Answer: X"
+LAST_NUMBER_REGEX = re.compile(
+    r"(?:answer\s*[:\s=]|result\s*[:\s=]|final\s*[:\s=]|the answer is)\s*([-+]?\d+\.?\d*(?:/\d+)?(?:[eE][-+]?\d+)?)",
+    re.IGNORECASE,
+)
+SIMPLE_NUMBER_LINE = re.compile(r"^\s*[-+]?\d+\.?\d*(?:/\d+)?(?:[eE][-+]?\d+)?\s*$")
+# Placeholder/invalid ANS content (prompt instruction, not actual answer)
+ANS_PLACEHOLDER_PATTERNS = (
+    "final answer only",
+    "only compact canonical form",
+    "compact canonical form",
+)
+# 최종 답안: / 결과값 extraction (multi-agent judge response)
+FINAL_ANSWER_LINE_REGEX = re.compile(r"최종\s*답안\s*[:\s]*([^\n]+)", re.IGNORECASE)
+RESULT_VALUE_REGEX = re.compile(r"결과값\s*[:\s]*([^\n]+)", re.IGNORECASE)
+# LaTeX fraction (short answer form)
+LATEX_FRAC_REGEX = re.compile(r"\\frac\{[^{}]+\}\{[^{}]+\}")
+
+def _is_placeholder_ans(ans: str) -> bool:
+    """True if ANS content looks like prompt placeholder, not a real answer."""
+    if not ans or len(ans) > 200:
+        return len(ans) > 200
+    lower = ans.lower().strip()
+    for p in ANS_PLACEHOLDER_PATTERNS:
+        if p in lower:
+            return True
+    return False
+
+
+def _extract_answer_from_long_text(text: str) -> Optional[str]:
+    """
+    From long/dialogue text, extract a short answer: 최종 답안: X, 결과값 X, last number, or LaTeX \\frac.
+    """
+    if not text or not isinstance(text, str):
+        return None
+    text = text.strip()
+    # 1. "최종 답안: 302" or "최종 답안: \frac{1}{6}"
+    m = FINAL_ANSWER_LINE_REGEX.search(text)
+    if m:
+        val = m.group(1).strip()
+        if val and len(val) < 300 and not _looks_like_dialogue(val):
+            return normalize_answer(val)
+    # 2. "결과값: 302"
+    m = RESULT_VALUE_REGEX.search(text)
+    if m:
+        val = m.group(1).strip()
+        if val and len(val) < 300 and not _looks_like_dialogue(val):
+            return normalize_answer(val)
+    # 3. Last LaTeX fraction
+    fracs = LATEX_FRAC_REGEX.findall(text)
+    if fracs:
+        return normalize_answer(fracs[-1])
+    # 4. Last integer or simple number in text (avoid extracting from JSON keys)
+    numbers = re.findall(r"(?<![.\d])([-+]?\d{1,10})(?![.\d])", text)
+    if numbers:
+        return normalize_answer(numbers[-1])
+    return None
+
+
+def _looks_like_dialogue(s: str) -> bool:
+    """True if string looks like prompt/dialogue/JSON, not a math answer."""
+    if len(s) > 400:
+        return True
+    s_lower = s.lower()
+    if "'role'" in s or "'content'" in s or '"role"' in s or '"content"' in s:
+        return True
+    if "선택:" in s and "이유:" in s:
+        return True
+    if "접근법" in s and "코드:" in s:
+        return True
+    return False
+
 
 def extract_answer(text: str) -> Optional[str]:
-    m = ANS_REGEX.search(text)
-    if not m:
+    if not (text or isinstance(text, str)):
         return None
-    ans = m.group(1).strip()
-    # Remove trailing explanatory clutter
-    ans = ans.split("\n")[0].strip()
-    return normalize_answer(ans)
+    text = text.strip()
+    # 1. <ANS>...</ANS>
+    m = ANS_REGEX.search(text)
+    if m:
+        ans = m.group(1).strip().split("\n")[0].strip()
+        if ans and not _is_placeholder_ans(ans):
+            return normalize_answer(ans)
+    # 2. \boxed{...}
+    boxed = BOXED_REGEX.search(text)
+    if boxed:
+        ans = boxed.group(1).strip()
+        if ans:
+            return normalize_answer(ans)
+    # 3. "answer is X" / "Answer: X"
+    last_num = LAST_NUMBER_REGEX.search(text)
+    if last_num:
+        return normalize_answer(last_num.group(1).strip())
+    # 4. Last line that is just a number
+    for line in reversed(text.split("\n")):
+        line = line.strip()
+        if SIMPLE_NUMBER_LINE.match(line):
+            return normalize_answer(line)
+    # 5. Any last number in text — 비활성화: 긴 추론에서는 중간값(예: 32)이 선택되는 것을 막기 위해
+    #    짧은 텍스트(<=400자)에서만 사용. 긴 추론은 실행 결과(cleaned_result)에 맡김.
+    if len(text) <= 400:
+        any_num = re.findall(r"[-+]?\d+\.?\d*(?:/\d+)?(?:[eE][-+]?\d+)?", text)
+        if any_num:
+            return normalize_answer(any_num[-1])
+    return None
+
+
+def normalize_multi_agent_answer(raw: Any) -> Optional[str]:
+    """
+    MULTI-AGENT 최종 답을 검증/저장용 문자열로 정규화.
+    dict(role/content)이면 content에서 숫자 추출, 문자열이면 extract_answer 적용.
+    긴 대화/JSON 문자열은 _extract_answer_from_long_text로 숫자·LaTeX만 추출.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        text = (
+            raw.get("content")
+            or raw.get("text")
+            or raw.get("value")
+            or raw.get("answer")
+            or raw.get("result")
+        )
+        if text is not None:
+            raw = text
+        else:
+            raw = str(raw)
+    if isinstance(raw, (int, float)):
+        return str(raw)
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return None
+        extracted = extract_answer(s)
+        # 긴 문자열이거나 대화/JSON 형태면 raw 반환 금지, long-text 추출 시도
+        if len(s) > 500 or _looks_like_dialogue(s):
+            if extracted and not _looks_like_dialogue(extracted) and len(extracted) < 400:
+                return extracted
+            fallback = _extract_answer_from_long_text(s)
+            return fallback if fallback is not None else (extracted if extracted and len(extracted) < 200 else None)
+        return extracted if extracted is not None else s or None
+    return str(raw).strip() or None
+
+
+# 라벨이 붙은 줄(Answer:, 결과:, 최종 답안: 등)을 우선 찾기 위함
+ANSWER_LABEL_PATTERN = re.compile(
+    r'^(Result|Answer|The answer is|Final answer|답변|결과|최종\s*답안)\s*[：:\s]*\s*(.*)$',
+    re.IGNORECASE
+)
+
 
 def extract_final_answer_from_output(output: str) -> str:
     """
     Extract the final answer from code execution output.
-    Takes the last non-empty line that looks like a numeric answer.
+    Prefer lines that are explicitly labeled (Answer:, 결과:, 최종 답안:);
+    otherwise use the last non-empty line that looks like a numeric answer.
     """
     if not output or output.startswith("Error:"):
         return output.strip()
+    # 모델 로드 실패 등으로 실행된 에러 메시지에서 숫자(예: 32-bit의 32)가 추출되지 않도록
+    out_upper = output.upper()
+    if "ERROR" in out_upper or "MODEL FAILED" in out_upper or "32-BIT" in out_upper:
+        return output.strip()
     
     lines = output.strip().split('\n')
-    # Filter out empty lines and error messages
+    labeled_values = []
     candidate_lines = []
     for line in lines:
         line = line.strip()
         if not line or line.startswith("Error:") or line.startswith("Warning:"):
             continue
-        # Remove common prefixes like "Result:", "Answer:", "The answer is", etc.
+        # 라벨이 붙은 줄 우선 수집 (Answer: 302, 결과: 1/6 등)
+        label_match = ANSWER_LABEL_PATTERN.match(line)
+        if label_match:
+            val = label_match.group(2).strip()
+            if val:
+                labeled_values.append(val)
         cleaned = re.sub(r'^(Result|Answer|The answer is|Final answer|답변|결과)[:：\s]*', '', line, flags=re.IGNORECASE)
         cleaned = cleaned.strip()
         if cleaned:
             candidate_lines.append(cleaned)
     
+    # 라벨이 붙은 값이 있으면 그 중 마지막 것 사용 (보통 최종 답 1개)
+    if labeled_values:
+        final = labeled_values[-1]
+        match = re.search(r'[-+]?\d+\.?\d*(?:/\d+)?(?:[eE][-+]?\d+)?', final)
+        if match:
+            return match.group(0)
+        # LaTeX \frac 등이면 그대로 반환
+        if final and len(final) < 200:
+            return final
+    
     if not candidate_lines:
         return output.strip()
     
-    # Return the last candidate line (most likely the final answer)
+    # 기존: 마지막 후보 줄에서 숫자 추출
     final = candidate_lines[-1]
-    # If it contains multiple values, try to extract the last one
-    # Common patterns: "x = 42", "answer: 42", "42 (answer)"
     match = re.search(r'[-+]?\d+\.?\d*(?:/\d+)?(?:[eE][-+]?\d+)?', final)
     if match:
         return match.group(0)
-    
     return final
 
 def normalize_answer(ans: str) -> str:
@@ -230,7 +389,7 @@ def self_refine(problem: str, draft: str, llm_generate) -> str:
     improved = llm_generate(critique_prompt)
     return improved if any(tag in improved for tag in STRUCTURE_TAGS) else draft
 
-def log_result(entry: Dict, path: str = "logs/eval_log.jsonl") -> None:
+def log_result(entry: Dict[str, Any], path: str = "logs/eval_log.jsonl") -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")

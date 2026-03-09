@@ -75,6 +75,7 @@ class CalculationRouter:
         return strategies
 
 if __name__ == "__main__":
+    # Example usage
     router = CalculationRouter()
-    print(f"Small N Plan: {router.route('Number Theory', {'N': 100})}")
-    print(f"Huge N Plan:  {router.route('Number Theory', {'N': 10**18})}")
+    # print(f"Small N Plan: {router.route('Number Theory', {'N': 100})}")
+    # print(f"Huge N Plan:  {router.route('Number Theory', {'N': 10**18})}")

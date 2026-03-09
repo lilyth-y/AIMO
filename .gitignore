@@ -44,3 +44,15 @@ results/
 *.safetensors
 *.bin
 models/
+
+
+# Logs and results
+*.log
+results.jsonl
+results_*.jsonl
+generated_*.json
+
+# Temporary files
+fix_*.py
+*_temp.py
+*_backup.py

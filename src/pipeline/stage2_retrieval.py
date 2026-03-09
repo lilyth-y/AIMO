@@ -16,5 +16,6 @@ class ContextLoader:
         return self.contexts.get(domain, "# No specific context loaded")
 
 if __name__ == "__main__":
+    # Example usage
     loader = ContextLoader()
-    print(loader.get_context("Number Theory"))
+    # print(loader.get_context("Number Theory"))

@@ -197,10 +197,15 @@ class EvaluationMetrics:
         output_path = os.path.join(output_dir, filename)
         
         metrics = self.calculate_metrics()
-        
+        try:
+            from .run_helpers import get_run_revision
+            run_revision = get_run_revision()
+        except Exception:
+            run_revision = {}
         output_data = {
             'dataset': self.dataset_name,
             'timestamp': datetime.now().isoformat(),
+            'run_revision': run_revision,
             'summary': metrics,
             'results': [r.to_dict() for r in self.results]
         }

@@ -1,0 +1,89 @@
+# Evaluation on release / tag (computing engine: GitHub runner, keyed by SHA)
+# Run evaluation and upload results + gradient report as artifacts (SHA in name for reproducibility)
+name: Eval on Release
+
+on:
+  push:
+    tags:
+      - 'eval/*'
+  workflow_dispatch:
+    inputs:
+      max_problems:
+        description: 'Max problems (e.g. 5 for quick run)'
+        required: false
+        default: '5'
+      model:
+        description: 'OMI_MODEL (e.g. Qwen/Qwen2-1.5B-Instruct)'
+        required: false
+        default: 'Qwen/Qwen2-1.5B-Instruct'
+
+env:
+  PYTHONPATH: src
+  OMI_MODEL: ${{ github.event.inputs.model || 'Qwen/Qwen2-1.5B-Instruct' }}
+  MATHCODEORCHESTRATOR_QUANTIZATION: '4bit'
+  MAX_PROBLEMS: ${{ github.event.inputs.max_problems || '5' }}
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Git SHA
+        id: sha
+        run: |
+          echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check data
+        run: |
+          if [ ! -f data/numina_eval_balanced.json ]; then
+            echo "Data not present; running setup (no model run)."
+            echo "HAS_DATA=false" >> $GITHUB_ENV
+          else
+            echo "HAS_DATA=true" >> $GITHUB_ENV
+          fi
+
+      - name: Run quick evaluation
+        id: run_eval
+        run: |
+          if [ "$HAS_DATA" = "true" ]; then
+            python examples/quick_eval.py 2>&1 | tee eval_log.txt || true
+          else
+            echo "Skipping eval (no data)." > eval_log.txt
+          fi
+        continue-on-error: true
+
+      - name: Collect artifacts (SHA-keyed names)
+        run: |
+          mkdir -p artifacts
+          SHORT=${{ steps.sha.outputs.short_sha }}
+          [ -f results/quick_eval_results.json ] && cp results/quick_eval_results.json "artifacts/${SHORT}_quick_eval_results.json"
+          [ -f results/gradient_report_quick_eval.json ] && cp results/gradient_report_quick_eval.json "artifacts/${SHORT}_gradient_report.json"
+          cp eval_log.txt "artifacts/${SHORT}_eval_log.txt" 2>/dev/null || true
+          ls -la artifacts/
+
+      - name: Upload evaluation artifacts (SHA-keyed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-${{ steps.sha.outputs.short_sha }}
+          path: artifacts/
+          retention-days: 30

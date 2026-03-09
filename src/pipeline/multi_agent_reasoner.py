@@ -7,6 +7,7 @@ for more robust mathematical reasoning and error detection.
 
 from typing import List, Dict, Any, Tuple
 from .solver import Solver
+from .reasoning_utils import extract_answer, _extract_answer_from_long_text
 
 class MultiAgentReasoner:
     """Implements multi-agent pipeline for reasoning verification."""
@@ -137,6 +138,12 @@ class MultiAgentReasoner:
             answer_line = [line for line in response.split('\n') if "최종 답안:" in line]
             final_answer = answer_line[0].replace("최종 답안:", "").strip() if answer_line else ""
 
+        # If final_answer is empty or looks like full dialogue/prompt, extract number/LaTeX only
+        if not final_answer or len(final_answer) > 200 or "'role'" in final_answer or "'content'" in final_answer:
+            extracted = extract_answer(response) or _extract_answer_from_long_text(response)
+            if extracted:
+                final_answer = extracted
+
         return {
             'selected_index': final_choice,
             'reason': final_reason,
@@ -159,7 +166,10 @@ class MultiAgentReasoner:
                 break
 
             approach = approaches[i]
-            print(f"[MULTI-AGENT] Coding approach {i+1}: {approach[:50]}...")
+            # ASCII-safe log (avoid cp949 encoding errors on Windows)
+            _preview = (approach.get("content", str(approach))[:50] if isinstance(approach, dict) else str(approach)[:50])
+            _preview = _preview.encode("ascii", "replace").decode("ascii")
+            print(f"[MULTI-AGENT] Coding approach {i+1}: {_preview}...")
 
             # Step 2: Coder
             code = self.code_solution(problem_text, approach)

@@ -2,7 +2,7 @@
 
 ## 개요
 
-[NuminaMath-CoT](https://huggingface.co/datasets/AI-MO/NuminaMath-CoT)는 AIMO Prize 우승팀이 사용한 860k 수학 문제 데이터셋입니다.
+[NuminaMath-CoT](https://huggingface.co/datasets/AI-MO/NuminaMath-CoT)는 MathCodeOrchestrator Prize 우승팀이 사용한 860k 수학 문제 데이터셋입니다.
 
 ## 데이터셋 특징
 
@@ -107,7 +107,7 @@ loader.export_training_data(
 }
 ```
 
-## AIMO 우승팀의 활용 방법
+## MathCodeOrchestrator 우승팀의 활용 방법
 
 ### NuminaMath Team 전략
 
@@ -116,7 +116,7 @@ loader.export_training_data(
    - 문제 → 코드 생성 → 실행 → 검증
    - 3가지 fallback 전략 (Hybrid, Simulator, Theoretician)
 3. **Majority Voting**: 48개 후보 솔루션 생성 후 다수결
-4. **성능**: AIMO Progress Prize에서 29/50 달성
+4. **성능**: MathCodeOrchestrator Progress Prize에서 29/50 달성
 
 ### 우리 프로젝트 통합 방안
 
@@ -174,7 +174,7 @@ python run_numina_evaluation.py --split hard
 ## 주요 파일
 
 ```
-AIMO3_Project/
+MathCodeOrchestrator3_Project/
 ├── src/
 │   └── data/
 │       └── numina_loader.py          # 데이터셋 로더
@@ -192,7 +192,7 @@ AIMO3_Project/
 - [NuminaMath Dataset (Hugging Face)](https://huggingface.co/datasets/AI-MO/NuminaMath-CoT)
 - [Project Numina GitHub](https://github.com/project-numina/aimo-progress-prize)
 - [NuminaMath Technical Report (PDF)](https://github.com/project-numina/aimo-progress-prize/blob/main/report/numina_dataset.pdf)
-- [AIMO Progress Prize](https://aimoprize.com/)
+- [MathCodeOrchestrator Progress Prize](https://aimoprize.com/)
 
 ## 라이선스
 

@@ -70,7 +70,8 @@ triangle = Triangle(A, B, C)
 # Apply theorems and solve
 # ...
 
-print(result)
+# Example usage (commented out for production)
+# print(result)
 ```
 
 Generate the complete solution code:"""

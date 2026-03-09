@@ -77,7 +77,7 @@ class NuminaMathDataLoader:
             cache_dir=self.cache_dir
         )
         
-        print(f"✅ Dataset loaded! Total samples: ~{total_samples}")
+        print(f"[OK] Dataset loaded! Total samples: ~{total_samples}")
         if self.version == "1.5":
             print("   Includes metadata: answer, problem_type, question_type")
         return self.dataset
@@ -97,7 +97,7 @@ class NuminaMathDataLoader:
             cache_dir=self.cache_dir
         )
         
-        print(f"✅ AIME validation set loaded! Total samples: {len(self.aime_dataset)}")
+        print(f"[OK] AIME validation set loaded! Total samples: {len(self.aime_dataset)}")
         print("   Source: AIME 2022, 2023, 2024 (official benchmark)")
         return self.aime_dataset
     
@@ -185,7 +185,7 @@ class NuminaMathDataLoader:
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(eval_set, f, indent=2, ensure_ascii=False)
         
-        print(f"✅ Evaluation set created: {len(eval_set)} problems")
+        print(f"[OK] Evaluation set created: {len(eval_set)} problems")
         print(f"   Easy: {len(easy)}, Medium: {len(medium)}, Hard: {len(hard)}")
         print(f"   Saved to: {output_file}")
         
@@ -283,7 +283,7 @@ class NuminaMathDataLoader:
                 if count % 1000 == 0:
                     print(f"   Processed: {count}/{n_samples}")
         
-        print(f"✅ Training data exported: {output_file}")
+        print(f"[OK] Training data exported: {output_file}")
         return output_file
     
     def analyze_dataset(self):
@@ -363,7 +363,7 @@ def create_aimo_evaluation_suite(version: str = "1.5", include_aime: bool = True
         aime_file = "data/aime_validation_90.json"
         with open(aime_file, 'w', encoding='utf-8') as f:
             json.dump(aime_set, f, indent=2, ensure_ascii=False)
-        print(f"✅ AIME validation set saved: {aime_file}")
+        print(f"[OK] AIME validation set saved: {aime_file}")
     
     # Create evaluation set from main dataset
     print("\n" + "="*60)

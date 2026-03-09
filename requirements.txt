@@ -14,3 +14,6 @@ sentencepiece
 psutil
 tqdm
 torch --extra-index-url https://download.pytorch.org/whl/cpu
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0

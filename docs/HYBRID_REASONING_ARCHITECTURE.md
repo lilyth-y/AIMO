@@ -2,7 +2,7 @@
 
 ## 개요
 
-AIMO 프로젝트의 긴 추론 체인 처리를 위한 하이브리드 아키텍처 설계 문서입니다.
+MathCodeOrchestrator 프로젝트의 긴 추론 체인 처리를 위한 하이브리드 아키텍처 설계 문서입니다.
 
 ## 핵심 질문과 해결책
 
@@ -176,8 +176,8 @@ Write Python code to FIND all values satisfying the conditions. Print all soluti
                             │
                             ▼
          ┌──────────────────────────────────────┐
-         │  1. Problem Classification           │
-         │  • Computational / Geometric /        │
+         │  • Computational / Geome
+         │  1. Problem Classification           │tric /        │
          │    Complex                            │
          └──────────────────────────────────────┘
                             │
@@ -185,8 +185,8 @@ Write Python code to FIND all values satisfying the conditions. Print all soluti
                 │                       │
          Simple │                       │ Complex
                 ▼                       ▼
-    ┌──────────────────┐    ┌────────────────────────┐
-    │  Standard Flow   │    │  Hybrid Reasoning      │
+    ┌──────────────────┐    ┌────o────────────────────┐
+    │  Standard Flow   │    │  Hybrid Reasning      │
     │  (TIR Pipeline)  │    │  Engine                │
     └──────────────────┘    └────────────────────────┘
                                         │
@@ -302,7 +302,7 @@ if problem_type == 'complex':
 - [Mamba Paper](https://arxiv.org/abs/2312.00752) - Selective State Space Models
 - [Transformer Paper](https://arxiv.org/abs/1706.03762) - Attention is All You Need
 - [NuminaMath Strategy](https://github.com/project-numina/aimo-progress-prize) - Tool-Integrated Reasoning
-- 현재 프로젝트: `AIMO3_Project/src/pipeline/`
+- 현재 프로젝트: `MathCodeOrchestrator3_Project/src/pipeline/`
 
 ---
 

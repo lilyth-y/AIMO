@@ -168,7 +168,7 @@ python run_aime_evaluation.py
 
 **Expected Performance:**
 - GPT-4: ~45%
-- AIMO Winners: ~58% (29/50 on AIMO Prize)
+- MathCodeOrchestrator Winners: ~58% (29/50 on MathCodeOrchestrator Prize)
 - Your baseline: TBD
 
 #### Tier 2: NuminaMath Balanced (Development)
@@ -312,7 +312,7 @@ sample['question_type'] # Problem format
 **Baselines:**
 - Random guessing: ~0.4% (1/250)
 - GPT-4: ~45%
-- AIMO Winners: ~58%
+- MathCodeOrchestrator Winners: ~58%
 - Human AIME average: ~5-6 correct (33-40%)
 
 **Your System Goals:**
@@ -368,7 +368,7 @@ dataset = loader.load_dataset(streaming=True)
    - 90 AIME 2022-2024 problems
    - Source: Art of Problem Solving wiki
 
-3. **AIMO Progress Prize:**
+3. **MathCodeOrchestrator Progress Prize:**
    - https://github.com/project-numina/aimo-progress-prize
    - Winners' solution used this data
    - Achieved 29/50 (58%)

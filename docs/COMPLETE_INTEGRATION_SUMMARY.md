@@ -119,7 +119,7 @@ GIVEN → IG1, IG2 → FINAL
 - **규모**: 860,000개 수학 문제
 - **형식**: Chain-of-Thought (CoT) 솔루션
 - **출처**: Olympiads (17.5%), CN_K12 (32.2%), AMC/AIME (0.5%), etc.
-- **사용처**: AIMO Prize 우승팀 (29/50 달성)
+- **사용처**: MathCodeOrchestrator Prize 우승팀 (29/50 달성)
 
 ### 난이도 분포
 
@@ -173,7 +173,7 @@ loader.export_training_data(
 ## 📂 프로젝트 구조 (업데이트)
 
 ```
-AIMO3_Project/
+MathCodeOrchestrator3_Project/
 ├── src/
 │   ├── pipeline/
 │   │   ├── solver.py                    # Qwen LLM (Transformer)
@@ -330,7 +330,7 @@ Final Answer (검증 가능한 추론 경로)
 ### 4. 실전 데이터 (NuminaMath-CoT)
 
 - **기존**: 자체 생성 50개 문제
-- **개선**: AIMO 우승팀이 사용한 860k 실전 문제
+- **개선**: MathCodeOrchestrator 우승팀이 사용한 860k 실전 문제
 
 ---
 
@@ -352,7 +352,7 @@ Final Answer (검증 가능한 추론 경로)
 
 7. **실제 Mamba 모델 통합**: 현재는 "스타일"만 차용
 8. **Fine-tuning**: NuminaMath로 Qwen 추가 학습
-9. **Large-scale Benchmark**: AIMO Progress Prize 참가
+9. **Large-scale Benchmark**: MathCodeOrchestrator Progress Prize 참가
 
 ---
 
@@ -363,7 +363,7 @@ Final Answer (검증 가능한 추론 경로)
 - [Mamba: Linear-Time Sequence Modeling](https://arxiv.org/abs/2312.00752)
 - [Attention is All You Need (Transformer)](https://arxiv.org/abs/1706.03762)
 - [NuminaMath Technical Report](https://github.com/project-numina/aimo-progress-prize/blob/main/report/numina_dataset.pdf)
-- [AIMO Progress Prize](https://aimoprize.com/)
+- [MathCodeOrchestrator Progress Prize](https://aimoprize.com/)
 
 ### 프로젝트 파일
 
@@ -379,4 +379,4 @@ Final Answer (검증 가능한 추론 경로)
 **상태**: 구현 완료, 테스트 대기
 
 **핵심 메시지**: 
-이제 세 가지 질문(긴 추론, Transformer+Mamba 조합, LLM 이해)에 대한 완전한 답변과 실행 가능한 코드가 준비되었습니다. NuminaMath-CoT 데이터셋을 활용하여 AIMO 수준의 성능을 목표로 벤치마크할 수 있습니다.
+이제 세 가지 질문(긴 추론, Transformer+Mamba 조합, LLM 이해)에 대한 완전한 답변과 실행 가능한 코드가 준비되었습니다. NuminaMath-CoT 데이터셋을 활용하여 MathCodeOrchestrator 수준의 성능을 목표로 벤치마크할 수 있습니다.

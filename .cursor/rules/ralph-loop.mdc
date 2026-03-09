@@ -1,0 +1,169 @@
+---
+description: Autonomous agentic looping that auto-detects task patterns and iterates until completion with minimal setup
+alwaysApply: true
+---
+
+# Ralph Loop Rule
+
+Automatically detect task patterns, establish completion criteria, and iterate autonomously until tasks are complete. Minimize manual intervention - set initial conditions and let the loop run.
+
+## Autonomous Execution
+
+When encountering tasks that require iteration:
+
+1. **Auto-detect task type** from context:
+   - "fix errors" → Linter/Test Fix Loop
+   - "refactor" → Refactoring Loop
+   - "update files" → Multi-file Update Loop
+   - "make tests pass" → Test-Driven Loop
+
+2. **Auto-infer completion criteria**:
+   - Errors mentioned → completion = 0 errors
+   - Tests mentioned → completion = all tests pass
+   - Files mentioned → completion = all files processed
+   - Refactor mentioned → completion = refactor + tests pass
+
+3. **Auto-execute iterations**:
+   - Run relevant checks (linter/tests/build)
+   - Fix issues in priority order
+   - Verify progress automatically
+   - Continue until completion criteria met
+
+4. **Auto-adapt on failure**:
+   - If stuck (no progress for 2 iterations) → try alternative approach
+   - If still stuck → escalate with context
+   - Otherwise → continue autonomously
+
+## Execution Pattern
+
+```python
+# Automatic loop structure
+while not complete and iteration < max_iterations:
+    # Auto-assess current state
+    state = assess_current_state()  # Run linter/tests/build as needed
+    
+    # Auto-calculate progress
+    progress = calculate_progress(state)
+    
+    # Auto-select next action
+    action = select_next_action(state, progress)
+    
+    # Execute action
+    execute(action)
+    
+    # Auto-verify completion
+    if completion_criteria_met():
+        terminate()
+    elif no_progress():
+        adapt_strategy()
+```
+
+## Auto-Detection Rules
+
+**Linter Errors**:
+- Detect: User mentions "linter", "lint", "errors"
+- Criteria: 0 linter errors
+- Action: Run linter → Fix errors → Verify → Repeat
+- Max: 15 iterations
+
+**Test Failures**:
+- Detect: User mentions "tests", "test failures", "make tests pass"
+- Criteria: All tests passing
+- Action: Run tests → Fix failures → Verify → Repeat
+- Max: 20 iterations
+
+**Refactoring**:
+- Detect: User mentions "refactor", "rename", "update all"
+- Criteria: All occurrences updated + tests pass
+- Action: Find → Replace → Test → Verify → Repeat
+- Max: 25 iterations
+
+**Multi-file Changes**:
+- Detect: User mentions "all files", "every file", "bulk update"
+- Criteria: All target files processed
+- Action: Process batch → Verify → Next batch → Repeat
+- Max: 30 iterations
+
+**Code Refinement (Self-Refine Loop)**:
+- Detect: User mentions "refine", "improve code", "fix verification", "self-refine"
+- Criteria: Code passes verification/tests
+- Action: Analyze error → Generate refined code → Verify → Repeat
+- Max: 3-5 iterations (configurable)
+- Special: Use RefineLoop from `src/pipeline/refine_loop.py` when working with orchestrator code
+
+## Progress Tracking (Automatic)
+
+Maintain progress state automatically:
+
+```markdown
+## Progress (Auto-tracked)
+Iteration: {current}/{max}
+Status: {auto-detected}
+Progress: {auto-calculated}%
+
+Metrics:
+- Errors: {current} → {target}
+- Tests: {passing}/{total}
+- Files: {processed}/{total}
+```
+
+## Self-Adaptation
+
+When progress stalls:
+1. Reduce batch size (process smaller chunks)
+2. Try alternative approach
+3. Skip problematic items (mark for review)
+4. If still stuck after 3 iterations → escalate to user
+
+## Termination (Auto)
+
+Terminate automatically when:
+- ✅ Completion criteria met (auto-verified)
+- ✅ All checks pass (auto-verified)
+- ⚠️ Max iterations reached (report status)
+- ⚠️ Stuck for 3+ iterations (escalate with context)
+
+## Project-Specific Patterns
+
+**AIMO/OMI Project - Self-Refine Loop**:
+When working with `src/pipeline/orchestrator.py` or related pipeline code:
+- Use `RefineLoop` class from `src/pipeline/refine_loop.py`
+- Follow the pattern: Verify → Refine → Re-verify → Repeat
+- Respect `settings.refine_max_iterations` (default: 3)
+- Log each iteration with `refine_iteration` field
+- Stop when verification passes or max iterations reached
+
+**Example Pattern**:
+```python
+from src.pipeline.refine_loop import RefineLoop
+from src.pipeline.settings import settings
+
+refine_loop = RefineLoop(
+    max_iterations=settings.refine_max_iterations,
+    enable_loop=settings.refine_enabled
+)
+
+while refine_loop.can_continue():
+    result, success = refine_loop.refine_attempt(...)
+    if success:
+        return result
+```
+
+## Key Principles
+
+1. **Minimal Setup**: Infer everything possible from context
+2. **Autonomous**: Don't ask permission at each step
+3. **Self-Monitoring**: Track and adapt automatically
+4. **Transparent**: Log decisions and progress
+5. **Graceful**: Escalate only when truly stuck
+6. **Project-Aware**: Use project-specific patterns (RefineLoop) when applicable
+
+## When to Interrupt
+
+Only interrupt autonomous execution when:
+- Stuck for 3+ iterations with zero progress
+- Ambiguous requirements need clarification
+- User decision required (choose between alternatives)
+- Safety limit reached
+
+Otherwise, continue autonomously until completion.
