@@ -258,6 +258,7 @@ class LocalLLMClient:
             use_messages = getattr(self.tokenizer, "chat_template", None) is not None
             max_tokens = int(os.getenv("AIMO_MAX_NEW_TOKENS", "10000000000000000000000000000000"))
             # GenerationConfig만 사용해 전달 (개별 인자와 중복 시 경고, max_length 미설정 시 pipeline 기본값 20과 충돌)
+            # temperature는 일부 백엔드에서 무시되어 경고가 나오므로 생략 (do_sample만으로 샘플링 제어)
             gen_cfg_kw = dict(
                 max_new_tokens=max_tokens,
                 do_sample=do_sample,
@@ -266,8 +267,6 @@ class LocalLLMClient:
                 eos_token_id=self.tokenizer.eos_token_id,
                 max_length=None,  # pipeline 기본 20과 충돌 방지
             )
-            if do_sample:
-                gen_cfg_kw["temperature"] = max(0.01, temperature)
             gen_config = GenerationConfig(**gen_cfg_kw)
 
             try:
