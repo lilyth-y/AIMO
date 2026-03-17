@@ -256,7 +256,7 @@ class LocalLLMClient:
                     pass
 
             use_messages = getattr(self.tokenizer, "chat_template", None) is not None
-            max_tokens = int(os.getenv("AIMO_MAX_NEW_TOKENS", "10000000000000000000000000000000"))
+            max_tokens = int(os.getenv("AIMO_MAX_NEW_TOKENS", "16384"))
             # GenerationConfig만 사용해 전달 (개별 인자와 중복 시 경고, max_length 미설정 시 pipeline 기본값 20과 충돌)
             # temperature는 일부 백엔드에서 무시되어 경고가 나오므로 생략 (do_sample만으로 샘플링 제어)
             gen_cfg_kw = dict(
@@ -268,19 +268,24 @@ class LocalLLMClient:
                 max_length=None,  # pipeline 기본 20과 충돌 방지
             )
             gen_config = GenerationConfig(**gen_cfg_kw)
+            # pipeline/백엔드에서 temperature 미지원 시 경고 제거: to_dict()에서 제거 후 dict로 전달
+            # (GenerationConfig 기본값에 temperature가 있으면 그대로 전달되어 경고 발생)
+            gen_dict = gen_config.to_dict()
+            gen_dict.pop("temperature", None)
+            gen_dict = {k: v for k, v in gen_dict.items() if v is not None}
 
             try:
                 if use_messages:
                     outputs = pipe(
                         [{"role": "user", "content": formatted_prompt}],
-                        generation_config=gen_config,
+                        generation_config=gen_dict,
                     )
                 else:
-                    outputs = pipe(formatted_prompt, generation_config=gen_config)
+                    outputs = pipe(formatted_prompt, generation_config=gen_dict)
             except Exception as e:
                 if "chat_template" in str(e) or "chat template" in str(e).lower():
                     use_messages = False
-                    outputs = pipe(formatted_prompt, generation_config=gen_config)
+                    outputs = pipe(formatted_prompt, generation_config=gen_dict)
                 else:
                     raise
 
@@ -379,9 +384,12 @@ class Solver:
         return code
 
     def generate_candidates(
-        self, problem_text: str, strategy: str, num_candidates: int, temps: list[float]
+        self, problem_text: str, strategy: str, num_candidates: int, _temps: list[float]
     ) -> list[str]:
-        """Generate multiple candidate codes (sharing single reasoning) for voting."""
+        """Generate multiple candidate codes (sharing single reasoning) for voting.
+
+        _temps: 현재 미사용 (호환성 유지용, orchestrator에서 CANDIDATE_TEMPS 전달).
+        """
         complexity_score = assess_complexity(problem_text)
         use_structured = (
             config.USE_STRUCTURED
@@ -404,8 +412,6 @@ class Solver:
             lemma_snippets = [k for k, _ in top]
         candidates = []
         for i in range(num_candidates):
-            # Pass temperature and allow sampling
-            temp = temps[i] if temps and i < len(temps) else 0.7
             prompt = self._construct_prompt(
                 problem_text,
                 strategy,
@@ -413,7 +419,7 @@ class Solver:
                 lemma_snippets,
             )
             try:
-                generated_text = self.llm.generate(prompt, do_sample=True, temperature=temp)
+                generated_text = self.llm.generate(prompt, do_sample=True)
             except Exception:
                 generated_text = (
                     "```python\nprint('ERROR: candidate generation failed')\n```"
