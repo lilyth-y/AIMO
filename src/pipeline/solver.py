@@ -65,16 +65,21 @@ class LocalLLMClient:
         self.model = None
         self.pipeline = None
 
+    @staticmethod
+    def _is_local_model_path(model_name: str) -> bool:
+        """True only for real filesystem paths; HuggingFace repo_id (e.g. Org/Model) is False."""
+        if model_name.startswith("/"):
+            return True
+        if len(model_name) > 2 and model_name[1:2] == ":":
+            return True
+        if os.path.sep in model_name and os.path.exists(model_name):
+            return True
+        return False
+
     def _get_tokenizer(self, model_name):
         """Get tokenizer with proper setup. Handles local path and cache issues on Windows."""
 
-        # Treat as local path if path exists or looks like absolute path (avoids HF repo_id validation)
-        looks_like_path = (
-            os.path.sep in model_name
-            or (len(model_name) > 2 and model_name[1:2] == ":")
-            or model_name.startswith("/")
-        )
-        is_local_path = looks_like_path
+        is_local_path = self._is_local_model_path(model_name)
 
         # For local paths, use local_files_only=True (required for Windows cache paths)
         if is_local_path:
@@ -113,16 +118,12 @@ class LocalLLMClient:
                 f"Loading model: {self.model_name} with {self.quantization} quantization..."
             )
 
-            is_local = (
-                os.path.sep in self.model_name
-                or (len(self.model_name) > 2 and self.model_name[1:2] == ":")
-                or self.model_name.startswith("/")
-            )
+            is_local = self._is_local_model_path(self.model_name)
             kw = dict(
                 device_map="auto",
                 trust_remote_code=True,
                 quantization_config=quantization_config,
-                torch_dtype=torch.float16,  # Always use fp16 to fit in 8GB VRAM
+                dtype=torch.float16,  # Always use fp16 to fit in 8GB VRAM (was torch_dtype, deprecated)
             )
             if is_local:
                 kw["local_files_only"] = True
@@ -193,28 +194,18 @@ class LocalLLMClient:
             model = self._get_model()
             logger.info("Setting up text generation pipeline...")
 
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore",
-                    message=".*torch_dtype.*deprecated.*",
-                    category=UserWarning,
-                )
-                _GLOBAL_LLM_PIPE = pipeline(
-                    "text-generation",
-                    model=model,
-                    tokenizer=self.tokenizer,
-                    device_map="auto",
-                    torch_dtype=torch.float16,
-                    do_sample=True,
-                    temperature=0.1,
-                    max_new_tokens=512,
-                    pad_token_id=self.tokenizer.pad_token_id,
-                    eos_token_id=self.tokenizer.eos_token_id,
-                )
+            # 생성 옵션은 generate() 호출 시에만 전달 (pipeline 생성 시 넣으면 호출 시와 중복되어 경고 발생)
+            _GLOBAL_LLM_PIPE = pipeline(
+                "text-generation",
+                model=model,
+                tokenizer=self.tokenizer,
+                device_map="auto",
+                dtype=torch.float16,
+            )
             logger.info("Pipeline ready")
         return _GLOBAL_LLM_PIPE
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, do_sample: bool = False, temperature: float = 0.1) -> str:
         """
         Generate code using local HuggingFace model or remote inference API.
         If OMI_REMOTE_INFERENCE_URL is set, calls that URL (computing engine = remote).
@@ -244,15 +235,35 @@ class LocalLLMClient:
                 formatted_prompt = prompt
 
             # tokenizer.chat_template이 없으면 messages 대신 문자열로 호출 (MathCoder 등)
+            # Instruct 모델인데 템플릿이 없으면 기본적인 Qwen 템플릿 부여 시도
+            if "Instruct" in (self.model_name or "") and getattr(self.tokenizer, "chat_template", None) is None:
+                try:
+                    self.tokenizer.chat_template = (
+                        "{% for message in messages %}"
+                        "{{ '<|im_start|>' + message['role'] + '\\n' + message['content'] + '<|im_end|>\\n' }}"
+                        "{% endfor %}"
+                        "{% if add_generation_prompt %}"
+                        "{{ '<|im_start|>assistant\\n' }}"
+                        "{% endif %}"
+                    )
+                except Exception:
+                    pass
+
             use_messages = getattr(self.tokenizer, "chat_template", None) is not None
-            max_tokens = int(os.getenv("AIMO_MAX_NEW_TOKENS", "512"))
+            max_tokens = int(os.getenv("AIMO_MAX_NEW_TOKENS", "1024"))
             pipe_kw = dict(
                 max_new_tokens=max_tokens,
-                do_sample=False,
+                do_sample=do_sample,
                 num_return_sequences=1,
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
             )
+            if do_sample:
+                pipe_kw["temperature"] = max(0.01, temperature)
+            else:
+                # temperature is not valid if do_sample is false in some transformers versions
+                pass
+                
             try:
                 if use_messages:
                     outputs = pipe(
@@ -387,7 +398,8 @@ class Solver:
             lemma_snippets = [k for k, _ in top]
         candidates = []
         for i in range(num_candidates):
-            # Temperature selection reserved for future multi-temp sampling
+            # Pass temperature and allow sampling
+            temp = temps[i] if temps and i < len(temps) else 0.7
             prompt = self._construct_prompt(
                 problem_text,
                 strategy,
@@ -395,7 +407,7 @@ class Solver:
                 lemma_snippets,
             )
             try:
-                generated_text = self.llm.generate(prompt)
+                generated_text = self.llm.generate(prompt, do_sample=True, temperature=temp)
             except Exception:
                 generated_text = (
                     "```python\nprint('ERROR: candidate generation failed')\n```"
@@ -566,11 +578,22 @@ class Solver:
         if code_lines:
             code = "\n".join(code_lines)
 
-        # Basic syntax validation
+        # Basic syntax validation (with optional fix for invalid decimal literal)
         try:
             compile(code, "<string>", "exec")
             self.last_syntax_error = False
         except SyntaxError as e:
+            if "invalid decimal literal" in str(e):
+                # e.g. 09.5, 012, 01 -> fix leading zeros and retry once
+                fixed = re.sub(r"\b0+([1-9]\d*(?:\.\d*)?)\b", r"\1", code)
+                try:
+                    compile(fixed, "<string>", "exec")
+                    code = fixed
+                    self.last_syntax_error = False
+                    logger.debug("Fixed invalid decimal literal (leading zeros) and recompiled.")
+                    return code
+                except SyntaxError:
+                    pass
             logger.warning(f"Syntax error detected: {e}")
             if len(code) > 200:
                 logger.debug(f"Problematic code: {repr(code[:200])}...")
