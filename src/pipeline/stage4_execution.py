@@ -27,7 +27,8 @@ except ImportError:
     psutil = None
     logger.warning("psutil not available - resource monitoring will be limited")
 
-DEFAULT_MEMORY_LIMIT_MB = int(os.getenv("AIMO_EXECUTOR_MEMORY_MB", "2048"))
+# 0 = 제한 없음 (성능 제한 완화)
+DEFAULT_MEMORY_LIMIT_MB = int(os.getenv("AIMO_EXECUTOR_MEMORY_MB", "0"))
 DEFAULT_CPU_TIME_LIMIT_SEC = float(os.getenv("AIMO_EXECUTOR_CPU_TIME_SEC", "10.0"))
 DEFAULT_CPU_PERCENT_LIMIT = float(os.getenv("AIMO_EXECUTOR_CPU_PERCENT", "100.0"))
 
@@ -185,19 +186,20 @@ class CodeExecutor:
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         break
                     
-                    # 메모리 체크
-                    try:
-                        mem_mb = p.memory_info().rss / (1024 * 1024)
-                        if mem_mb > self.memory_limit_mb:
-                            snippet = (code[:400] + "...") if len(code) > 400 else code
-                            logger.warning(
-                                "Memory limit exceeded: %.2fMB > %dMB (code len=%d). Snippet:\n%s",
-                                mem_mb, self.memory_limit_mb, len(code), snippet,
-                            )
-                            self._terminate_process(proc, p)
-                            return "Error: MemoryLimitExceeded"
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        break
+                    # 메모리 체크 (memory_limit_mb > 0 일 때만)
+                    if self.memory_limit_mb > 0:
+                        try:
+                            mem_mb = p.memory_info().rss / (1024 * 1024)
+                            if mem_mb > self.memory_limit_mb:
+                                snippet = (code[:400] + "...") if len(code) > 400 else code
+                                logger.warning(
+                                    "Memory limit exceeded: %.2fMB > %dMB (code len=%d). Snippet:\n%s",
+                                    mem_mb, self.memory_limit_mb, len(code), snippet,
+                                )
+                                self._terminate_process(proc, p)
+                                return "Error: MemoryLimitExceeded"
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            break
                     
                     # CPU 사용률 체크 (과도한 CPU 사용 방지)
                     try:
@@ -307,11 +309,10 @@ class CodeExecutor:
                     
                     if alive:
                         try:
-                            # 메모리 모니터링
+                            # 메모리 모니터링 (memory_limit_mb > 0 일 때만)
                             mem_mb = p.memory_info().rss / (1024 * 1024)
                             peak_mem = max(peak_mem, mem_mb)
-                            
-                            if mem_mb > self.memory_limit_mb:
+                            if self.memory_limit_mb > 0 and mem_mb > self.memory_limit_mb:
                                 snippet = (code[:400] + "...") if len(code) > 400 else code
                                 logger.warning(
                                     "Memory limit exceeded: %.2fMB > %dMB (code len=%d). Snippet:\n%s",

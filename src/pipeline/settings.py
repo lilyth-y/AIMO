@@ -16,10 +16,11 @@ class Settings:
     # 모델 설정
     @property
     def model_name(self) -> str:
-        """사용할 모델 이름 (HuggingFace repo_id 또는 로컬 절대경로). 기본값은 repo_id만 사용."""
+        """사용할 모델 이름 (HuggingFace repo_id 또는 로컬 절대경로).
+        기본값: 1.5B (빠른 평가). Kaggle/긴 세션에서는 OMI_MODEL=MathLLMs/MathCoder-L-13B 로 13B 사용 가능."""
         return os.getenv(
             "OMI_MODEL",
-            os.getenv("AIMO_MODEL", "MathLLMs/MathCoder-L-13B")
+            os.getenv("AIMO_MODEL", "Qwen/Qwen2.5-Math-1.5B-Instruct")
         )
     
     @property
@@ -97,8 +98,8 @@ class Settings:
     
     @property
     def executor_memory_limit_mb(self) -> int:
-        """코드 실행 메모리 제한 (MB)"""
-        return int(os.getenv("AIMO_EXECUTOR_MEMORY_MB", "2048"))
+        """코드 실행 메모리 제한 (MB). 0이면 제한 없음."""
+        return int(os.getenv("AIMO_EXECUTOR_MEMORY_MB", "0"))
     
     # 테스트 설정
     @property

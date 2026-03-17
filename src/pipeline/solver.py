@@ -15,8 +15,13 @@ try:
 except Exception:
     torch = None
 try:
-    from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM  # type: ignore
-    from transformers import BitsAndBytesConfig  # type: ignore
+    from transformers import (  # type: ignore
+        pipeline,
+        AutoTokenizer,
+        AutoModelForCausalLM,
+        BitsAndBytesConfig,
+        GenerationConfig,
+    )
 except Exception as e:
     # Logger not available yet during import, use print for critical import errors
     print(f"[IMPORT ERROR] transformers import failed: {e}")
@@ -24,6 +29,7 @@ except Exception as e:
     AutoTokenizer = None
     AutoModelForCausalLM = None
     BitsAndBytesConfig = None
+    GenerationConfig = None  # type: ignore[misc, assignment]
 from . import config
 from .reasoning_utils import build_structured_prompt, assess_complexity
 from .lemma_cache import GLOBAL_LEMMA_CACHE
@@ -250,31 +256,32 @@ class LocalLLMClient:
                     pass
 
             use_messages = getattr(self.tokenizer, "chat_template", None) is not None
-            max_tokens = int(os.getenv("AIMO_MAX_NEW_TOKENS", "1024"))
-            pipe_kw = dict(
+            max_tokens = int(os.getenv("AIMO_MAX_NEW_TOKENS", "10000000000000000000000000000000"))
+            # GenerationConfig만 사용해 전달 (개별 인자와 중복 시 경고, max_length 미설정 시 pipeline 기본값 20과 충돌)
+            gen_cfg_kw = dict(
                 max_new_tokens=max_tokens,
                 do_sample=do_sample,
                 num_return_sequences=1,
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
+                max_length=None,  # pipeline 기본 20과 충돌 방지
             )
             if do_sample:
-                pipe_kw["temperature"] = max(0.01, temperature)
-            else:
-                # temperature is not valid if do_sample is false in some transformers versions
-                pass
-                
+                gen_cfg_kw["temperature"] = max(0.01, temperature)
+            gen_config = GenerationConfig(**gen_cfg_kw)
+
             try:
                 if use_messages:
                     outputs = pipe(
-                        [{"role": "user", "content": formatted_prompt}], **pipe_kw
+                        [{"role": "user", "content": formatted_prompt}],
+                        generation_config=gen_config,
                     )
                 else:
-                    outputs = pipe(formatted_prompt, **pipe_kw)
+                    outputs = pipe(formatted_prompt, generation_config=gen_config)
             except Exception as e:
                 if "chat_template" in str(e) or "chat template" in str(e).lower():
                     use_messages = False
-                    outputs = pipe(formatted_prompt, **pipe_kw)
+                    outputs = pipe(formatted_prompt, generation_config=gen_config)
                 else:
                     raise
 
