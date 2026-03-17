@@ -126,18 +126,6 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
 
-
-
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-
-
-
-
-
-
-
-
-
 # Initialize tracing
 
 
@@ -161,6 +149,7 @@ tracer = trace.get_tracer(__name__)
 # OTLP: only when OMI_OTLP_TRACING=1 (avoids localhost:4317 connection errors)
 if os.environ.get("OMI_OTLP_TRACING", "").lower() in ("1", "true", "yes"):
     try:
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
         otlp_exporter = OTLPSpanExporter(endpoint="http://localhost:4317", insecure=True)
         trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(otlp_exporter))
     except Exception as e:
