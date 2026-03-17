@@ -116,7 +116,27 @@ class Settings:
     def refine_enabled(self) -> bool:
         """Refine 루프 활성화 여부"""
         return os.getenv("OMI_REFINE_ENABLED", "true").lower() == "true"
-    
+
+    @property
+    def executor_self_correction_max_attempts(self) -> int:
+        """실행 실패 시 수정 코드 재시도 최대 횟수 (기본 1 = 기존 동작)"""
+        return max(1, int(os.getenv("AIMO_SELF_CORRECTION_MAX_ATTEMPTS", "1")))
+
+    @property
+    def use_multi_agent_for_proof(self) -> bool:
+        """proof 또는 고복잡도 문제에서 전략 루프 전에 multi-agent 선시도 (기본 False)"""
+        return os.getenv("AIMO_USE_MULTI_AGENT_EARLY", "0") == "1"
+
+    @property
+    def multi_agent_early_complexity_threshold(self) -> int:
+        """multi-agent 선시도 적용 복잡도 임계치 (이상이면 선시도)"""
+        return int(os.getenv("AIMO_MULTI_AGENT_EARLY_COMPLEXITY_THRESHOLD", "20"))
+
+    @property
+    def use_geometric_handler(self) -> bool:
+        """기하 문제 전용 핸들러 사용 (기본 False, IMO 평가 시 비활성 권장)"""
+        return os.getenv("AIMO_USE_GEOMETRIC_HANDLER", "0") == "1"
+
     def validate(self) -> list[str]:
         """
         설정을 검증하고 문제가 있으면 경고 리스트를 반환합니다.

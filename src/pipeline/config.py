@@ -19,6 +19,10 @@ try:
     HF_MODEL_NAME = settings.model_name
     QUANTIZATION_DEFAULT = settings.quantization
     DECOMPOSITION_COMPLEXITY_THRESHOLD = settings.decomposition_complexity_threshold
+    EXECUTOR_SELF_CORRECTION_MAX_ATTEMPTS = settings.executor_self_correction_max_attempts
+    USE_MULTI_AGENT_EARLY = settings.use_multi_agent_for_proof
+    MULTI_AGENT_EARLY_COMPLEXITY_THRESHOLD = settings.multi_agent_early_complexity_threshold
+    USE_GEOMETRIC_HANDLER = settings.use_geometric_handler
 except ImportError:
     # Fallback to old values if settings.py not available (repo_id only, no local path)
     USE_STRUCTURED = True
@@ -27,9 +31,13 @@ except ImportError:
     LOG_PATH = "logs/eval_log.jsonl"
     NUM_CANDIDATES = 3
     USE_VOTING = False
-    HF_MODEL_NAME = "MathLLMs/MathCoder-L-13B"
+    HF_MODEL_NAME = "Qwen/Qwen2.5-Math-1.5B-Instruct"
     QUANTIZATION_DEFAULT = "8bit"
     DECOMPOSITION_COMPLEXITY_THRESHOLD = 15
+    EXECUTOR_SELF_CORRECTION_MAX_ATTEMPTS = 1
+    USE_MULTI_AGENT_EARLY = False
+    MULTI_AGENT_EARLY_COMPLEXITY_THRESHOLD = 20
+    USE_GEOMETRIC_HANDLER = False
 
 # Legacy constants (deprecated)
 REFINE_PASSES = 0  # future use

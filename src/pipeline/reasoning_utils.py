@@ -138,12 +138,15 @@ def _extract_answer_from_long_text(text: str) -> Optional[str]:
     m = FINAL_ANSWER_LINE_REGEX.search(text)
     if m:
         val = m.group(1).strip()
+        # Remove trailing JSON-like clutter: \n'} or \n"} or \n]
+        val = re.sub(r"[\n\r\s'}\"\]]+$", "", val)
         if val and len(val) < 300 and not _looks_like_dialogue(val):
             return normalize_answer(val)
     # 2. "결과값: 302"
     m = RESULT_VALUE_REGEX.search(text)
     if m:
         val = m.group(1).strip()
+        val = re.sub(r"[\n\r\s'}\"\]]+$", "", val)
         if val and len(val) < 300 and not _looks_like_dialogue(val):
             return normalize_answer(val)
     # 3. Last LaTeX fraction
@@ -162,7 +165,11 @@ def _looks_like_dialogue(s: str) -> bool:
     if len(s) > 400:
         return True
     s_lower = s.lower()
-    if "'role'" in s or "'content'" in s or '"role"' in s or '"content"' in s:
+    if "'role'" in s_lower or "'content'" in s_lower or '"role"' in s_lower or '"content"' in s_lower:
+        return True
+    if s.strip().startswith('{') and s.strip().endswith('}'):
+        return True
+    if s.strip().startswith('[') and s.strip().endswith(']'):
         return True
     if "선택:" in s and "이유:" in s:
         return True
@@ -247,6 +254,11 @@ ANSWER_LABEL_PATTERN = re.compile(
     r'^(Result|Answer|The answer is|Final answer|답변|결과|최종\s*답안)\s*[：:\s]*\s*(.*)$',
     re.IGNORECASE
 )
+# 문장 형태: "So the answer is 42.", "Hence the answer is 1/6."
+SENTENCE_ANSWER_PATTERN = re.compile(
+    r'(?:so|hence|therefore|thus)\s*,?\s*(?:the\s+)?answer\s+is\s+([-+]?\d+\.?\d*(?:/\d+)?(?:[eE][-+]?\d+)?)',
+    re.IGNORECASE
+)
 
 
 def extract_final_answer_from_output(output: str) -> str:
@@ -261,7 +273,13 @@ def extract_final_answer_from_output(output: str) -> str:
     out_upper = output.upper()
     if "ERROR" in out_upper or "MODEL FAILED" in out_upper or "32-BIT" in out_upper:
         return output.strip()
-    
+
+    # 문장 형태 폴백: "So the answer is 42.", "Hence the answer is 1/6." 등
+    sent_match = SENTENCE_ANSWER_PATTERN.search(output)
+    if sent_match:
+        val = sent_match.group(1).strip().rstrip(".")
+        return val if val else sent_match.group(1).strip()
+
     lines = output.strip().split('\n')
     labeled_values = []
     candidate_lines = []
@@ -409,7 +427,8 @@ def count_tokens(text: str) -> int:
     return len(text.strip().split())
 
 def make_ids(problem_text: str) -> Dict[str, str]:
-    import uuid, hashlib
+    import uuid
+    import hashlib
     run_id = str(uuid.uuid4())
     problem_hash = hashlib.sha1(problem_text.encode("utf-8")).hexdigest()[:12]
     return {"run_id": run_id, "problem_id": problem_hash}

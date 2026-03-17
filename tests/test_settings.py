@@ -88,10 +88,10 @@ class TestSettings:
         assert s.executor_timeout_seconds > 0
     
     def test_executor_memory_limit(self):
-        """Executor memory limit 테스트"""
+        """Executor memory limit 테스트 (0 = 제한 없음)"""
         s = Settings()
         assert isinstance(s.executor_memory_limit_mb, int)
-        assert s.executor_memory_limit_mb > 0
+        assert s.executor_memory_limit_mb >= 0
     
     def test_fast_test(self):
         """Fast test 설정 테스트"""

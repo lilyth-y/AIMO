@@ -88,13 +88,18 @@ class ProblemAnalyzer:
     def extract_variables(self, problem_text: str) -> Dict[str, Any]:
         """
         Extracts variables and constraints from the problem text.
+        Supports: N = 10, n=10, N= 10, and "let N be 10" / "N be 10" style.
         """
         variables = {}
-        # Simple regex to find N = ... or similar patterns
-        # In a real scenario, this would use an LLM
-        matches = re.findall(r'([A-Za-z])\s*=\s*(\d+)', problem_text)
-        for var, val in matches:
-            variables[var] = int(val)
+        # X = 123 or x=123, N= 10 (flexible spaces); 단일 문자는 대문자로 통일 (라우터가 N 사용)
+        for var, val in re.findall(r'([A-Za-z])\s*=\s*(\d+)', problem_text):
+            key = var.upper() if len(var) == 1 else var
+            variables[key] = int(val)
+        # "let N be 10" or "N be 10"
+        for var, val in re.findall(r'(?:let\s+)?([A-Za-z])\s+be\s+(\d+)', problem_text, re.IGNORECASE):
+            key = var.upper() if len(var) == 1 else var
+            if key not in variables:
+                variables[key] = int(val)
         return variables
 
 if __name__ == "__main__":

@@ -389,75 +389,18 @@ class PipelineOrchestrator:
 
 
 
-            # Disable geometric handler for IMO-level evaluation (0.5B model insufficient)
-
-
-
-
-            # if problem_type == 'geometric' and len(problem_text) < 500:
-
-
-
-
-            #     print("[Special Handler] Detected GEOMETRIC problem (simple)")
-
-
-
-
-            #     result = self._solve_geometric(problem_text)
-
-
-
-
-            #     if result:
-
-
-
-
-            #         return {
-
-
-
-
-            #             'answer': result,
-
-
-
-
-            #             'method': 'geometric_handler',
-
-
-
-
-            #             'code': None,
-
-
-
-
-            #             'execution_result': result
-
-
-
-
-            #         }
-
-
-
-
-            #     else:
-
-
-
-
-            #         print("[Geometric handler failed, falling back to general pipeline]")
-
-
-
-
-            
-
-
-
+            # Geometric handler: 활성화 시 기하 문제에서 전용 솔버 시도 (기본 비활성)
+            if getattr(config, "USE_GEOMETRIC_HANDLER", False) and problem_type == "geometric" and len(problem_text) < 500:
+                logger.info("[Special Handler] Detected GEOMETRIC problem (simple)")
+                result = self._solve_geometric(problem_text)
+                if result:
+                    return {
+                        "answer": result,
+                        "method": "geometric_handler",
+                        "code": None,
+                        "execution_result": result,
+                    }
+                logger.debug("[Geometric handler failed, falling back to general pipeline]")
 
             # Handle complex problems that need decomposition
 
@@ -706,13 +649,51 @@ class PipelineOrchestrator:
 
             last_was_timeout = False
 
-
-
-
-
-
-
-
+            # Phase 2.1: proof 또는 고복잡도일 때 multi-agent 선시도 (설정 시)
+            use_multi_agent_early = getattr(config, "USE_MULTI_AGENT_EARLY", False)
+            multi_agent_early_threshold = getattr(config, "MULTI_AGENT_EARLY_COMPLEXITY_THRESHOLD", 20)
+            if use_multi_agent_early and (problem_type == "proof" or (complexity_score or 0) >= multi_agent_early_threshold):
+                if self.multi_agent is None:
+                    self.multi_agent = MultiAgentReasoner(self.solver, self.executor)
+                try:
+                    multi_result = self.multi_agent.solve_with_multi_agent(problem_text)
+                    final_answer = normalize_multi_agent_answer(multi_result.get("final_answer"))
+                    if final_answer:
+                        logger.info(f"MULTI-AGENT (early) Success! Answer: {final_answer}")
+                        log_result({
+                            "problem_preview": problem_text[:80],
+                            "strategy": "multi_agent_early",
+                            "structured_used": True,
+                            "complexity_score": complexity_score,
+                            "extracted_answer": final_answer,
+                            "execution_result": "multi_agent_result",
+                            "verified": True,
+                            "attempt": 1,
+                            "mismatch": False,
+                            "mismatch_type": None,
+                            "resource_usage": None,
+                            "strategy_features": feat,
+                            "cache_hits": 0,
+                            **ids,
+                            "strategy_order": ["multi_agent_early"],
+                        }, path=config.LOG_PATH)
+                        return {
+                            "answer": final_answer,
+                            "method": "multi_agent",
+                            "code": None,
+                            "execution_result": "multi_agent_result",
+                            "structured_used": True,
+                            "extracted_answer": final_answer,
+                            "verified": True,
+                            "mismatch": False,
+                            "mismatch_type": None,
+                            "resource_usage": None,
+                            "strategy_features": feat,
+                            "cache_hits": 0,
+                            **ids,
+                        }
+                except Exception as e:
+                    logger.debug(f"Multi-agent early attempt failed: {e}")
 
             for attempt, strategy in enumerate(strategies, 1):
 
@@ -799,146 +780,48 @@ class PipelineOrchestrator:
 
 
 
+                    vote_tally = {}
                     for idx, cand in enumerate(candidates):
-
-
-
-
                         if hasattr(self.executor, 'execute_with_stats'):
-
-
-
-
                             exec_out, stats = self.executor.execute_with_stats(cand)
-
-
-
-
                             cand_result = exec_out
-
-
-
-
                             cand_stats = stats
-
-
-
-
                         else:
-
-
-
-
                             cand_result = self.executor.execute(cand)
-
-
-
-
                             cand_stats = None
 
-
-
-
-                        # Convert cand_result to string
-
-
-
-
                         cand_result = str(cand_result)
-
-
-
-
                         cleaned = extract_final_answer_from_output(cand_result)
-
-
-
-
                         verified_cand = False if cleaned.startswith('ERROR:') else self.verifier.verify(cleaned, variables)
 
-
-
-
+                        if cleaned not in vote_tally:
+                            vote_tally[cleaned] = {'count': 0, 'code': cand, 'stats': cand_stats, 'verified': verified_cand}
+                        
+                        vote_tally[cleaned]['count'] += 1
                         if verified_cand:
-
-
-
-
-                            code = cand
-
-
-
-
-                            result = cleaned
-
-
-
-
-                            resource_stats = cand_stats
-
-
-
-
-                            selected_index = idx
-
-
-
-
-                            logger.info(f"Candidate {idx+1} verified; selecting.")
-
-
-
-
-                            break
-
-
-
-
-                        else:
-
-
-
-
-                            logger.debug(f"Candidate {idx+1} failed; trying next...")
-
-
-
-
-                            if code is None:
-
-
-
-
-                                code = cand
-
-
-
-
-                                result = cleaned
-
-
-
-
-                                resource_stats = cand_stats
-
-
-
-
-                                selected_index = idx
-
-
-
-
-                    if code is None:
-
-
-
-
-                        code = candidates[0]
-
-
-
-
+                            vote_tally[cleaned]['verified'] = True
+
+                    best_answer = None
+                    best_tally = None
+                    
+                    verified_candidates = {k: v for k, v in vote_tally.items() if v['verified']}
+                    if verified_candidates:
+                        best_answer = max(verified_candidates.items(), key=lambda x: x[1]['count'])[0]
+                        best_tally = verified_candidates[best_answer]
+                        logger.info(f"Majority Voting: Selected VERIFIED answer '{best_answer}' with {best_tally['count']} votes.")
+                    else:
+                        if vote_tally:
+                            best_answer = max(vote_tally.items(), key=lambda x: x[1]['count'])[0]
+                            best_tally = vote_tally[best_answer]
+                            logger.info(f"Majority Voting: No verified answers. Selected most frequent '{best_answer}' with {best_tally['count']} votes.")
+                            
+                    if best_tally:
+                        code = best_tally['code']
+                        result = best_answer
+                        resource_stats = best_tally['stats']
+                        selected_index = 0
+                    else:
+                        code = candidates[0] if candidates else "print('ERROR: no candidates')"
                         result = 'ERROR: no candidates'
 
 
@@ -1055,119 +938,37 @@ class PipelineOrchestrator:
 
 
                 # 4. Check for Execution Failure & Traceback (Self-Correction)
-
-
-
-
                 if result and "Error" in result:
-
-
-
-
                     logger.warning(f"Execution Failed: {result.strip()}")
-
-
-
-
-                    
-
-
-
-
-                    # Traceback & Fix Loop (single attempt only for IMO problems)
-
-
-
-
-                    logger.info("Analyzing Traceback (Self-Correction)...")
-
-                    fixed_code = attempt_code_fix(code, result) if (result and code) else None
-                    if fixed_code is None and result and code and "Error:" in result:
-                        fix_prompt = build_fix_code_prompt(code, result)
-                        if fix_prompt:
-                            try:
-                                fixed_code = self.solver.generate_code_from_prompt(fix_prompt)
-                            except Exception:
-                                fixed_code = None
-
-
-
-
-                    if fixed_code:
-
-
-
-
+                    max_correction_attempts = getattr(config, "EXECUTOR_SELF_CORRECTION_MAX_ATTEMPTS", 1)
+                    fix_success = False
+                    current_code, current_result = code, result
+                    for correction_attempt in range(max_correction_attempts):
+                        logger.info("Analyzing Traceback (Self-Correction)...")
+                        fixed_code = attempt_code_fix(current_code, current_result) if (current_result and current_code) else None
+                        if fixed_code is None and current_result and current_code and "Error:" in current_result:
+                            fix_prompt = build_fix_code_prompt(current_code, current_result)
+                            if fix_prompt:
+                                try:
+                                    fixed_code = self.solver.generate_code_from_prompt(fix_prompt)
+                                except Exception:
+                                    fixed_code = None
+                        if not fixed_code:
+                            break
                         logger.info("Retrying with Fixed Code...")
-
-
-
-
                         try:
-
-
-
-
-                                result = self.executor.execute(fixed_code)
-
-
-
-
+                            current_result = self.executor.execute(fixed_code)
                         except Exception as e:
-
-
-
-
-                            result = f"ERROR: {str(e)}"
-
-
-
-
-                        
-
-
-
-
-                        if "Error" not in result:
-
-
-
-
+                            current_result = f"ERROR: {str(e)}"
+                        if "Error" not in current_result:
+                            result = current_result
+                            fix_success = True
                             logger.info(f"Fix Successful! Result: {result.strip()}")
-
-
-
-
-                        else:
-
-
-
-
-                            logger.warning(f"Fix Failed again: {result.strip()}")
-
-
-
-
-                            logger.warning("Triggering Fallback Strategy...")
-
-
-
-
-                            continue  # Try next strategy
-
-
-
-
-                    else:
-
-
-
-
+                            break
+                        logger.warning(f"Fix Failed again: {current_result.strip()}")
+                        current_code = fixed_code
+                    if not fix_success:
                         logger.warning("Triggering Fallback Strategy...")
-
-
-
-
                         continue
 
 
@@ -2087,7 +1888,7 @@ class PipelineOrchestrator:
 
 
 
-                self.multi_agent = MultiAgentReasoner(self.solver)
+                self.multi_agent = MultiAgentReasoner(self.solver, self.executor)
 
 
 
