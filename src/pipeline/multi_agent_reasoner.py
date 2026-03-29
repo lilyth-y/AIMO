@@ -12,8 +12,9 @@ from .reasoning_utils import extract_answer, _extract_answer_from_long_text
 class MultiAgentReasoner:
     """Implements multi-agent pipeline for reasoning verification."""
 
-    def __init__(self, solver: Solver):
+    def __init__(self, solver: Solver, executor: Any = None):
         self.solver = solver
+        self.executor = executor
 
     def generate_alternatives(self, problem_text: str) -> List[str]:
         """Generator: Creates diverse problem-solving approaches."""
@@ -31,7 +32,7 @@ class MultiAgentReasoner:
 
 응답은 접근법 목록만 포함할 것.
 """
-        response = self.solver.llm.generate(prompt)
+        response = self.solver.llm.generate(prompt, do_sample=True)
         # Parse into list of approaches
         approaches = [line.strip() for line in response.split('\n')
                      if line.strip() and not line.upper().startswith('접근법')]
@@ -52,7 +53,7 @@ class MultiAgentReasoner:
 
 코드:
 """
-        return self.solver.llm.generate(prompt)
+        return self.solver.llm.generate(prompt, do_sample=True)
 
     def review_code(self, problem_text: str, code: str, result: str, approach: str) -> Tuple[bool, str]:
         """Reviewer: Critically examines the solution."""
@@ -73,7 +74,7 @@ class MultiAgentReasoner:
 
 응답은 위 형식만 지킬 것.
 """
-        response = self.solver.llm.generate(prompt)
+        response = self.solver.llm.generate(prompt, do_sample=False)
 
         # Simple parsing
         if "등급: PASS" in response:
@@ -96,9 +97,22 @@ class MultiAgentReasoner:
 """)
 
         candidates_text = "\n".join(candidate_summaries)
+        
+        # Determine if there is numerical consensus among candidates
+        results = [c['result'] for c in candidates if 'result' in c]
+        consensus_counts = {}
+        for r in results:
+            if r and not r.startswith("ERROR"):
+                consensus_counts[r] = consensus_counts.get(r, 0) + 1
+        
+        consensus_info = ""
+        if consensus_counts:
+            most_common = max(consensus_counts.items(), key=lambda x: x[1])
+            if most_common[1] > 1:
+                consensus_info = f"\n[System Note: Found consensus on answer '{most_common[0]}' ({most_common[1]}/{len(candidates)} candidates)]"
 
         prompt = f"""
-최종 결정을 내려라. 다음 후보 솔루션 중에서 문제를 가장 잘 해결한 최종 답안을 선택하라.
+최종 결정을 내려라. 다음 후보 솔루션 중에서 문제를 가장 잘 해결한 최종 답안을 선택하라.{consensus_info}
 
 문제: {problem_text}
 
@@ -114,7 +128,7 @@ class MultiAgentReasoner:
 이유: [설명]
 최종 답안: [결과값]
 """
-        response = self.solver.llm.generate(prompt)
+        response = self.solver.llm.generate(prompt, do_sample=False)
 
         # Parse response
         final_choice = None
@@ -127,7 +141,7 @@ class MultiAgentReasoner:
                 choice_text = choice_line[0].replace("선택:", "").strip()
                 try:
                     final_choice = int(choice_text.split()[0]) - 1  # 0-index
-                except:
+                except Exception:
                     final_choice = 0
 
         if "이유:" in response:
@@ -175,12 +189,17 @@ class MultiAgentReasoner:
             code = self.code_solution(problem_text, approach)
             stripped_code = code.replace("```python", "").replace("```", "").strip()
 
-            # Execute code (mock for now, use executor in real)
+            # Execute code using the real executor
             try:
-                # Simple execution simulation
-                result = "42"  # Placeholder - would use self.executor
-            except:
-                result = "ERROR: execution failed"
+                if self.executor:
+                    if hasattr(self.executor, 'execute_with_stats'):
+                        result, _ = self.executor.execute_with_stats(stripped_code)
+                    else:
+                        result = self.executor.execute(stripped_code)
+                else:
+                    result = "ERROR: No executor provided"
+            except Exception as e:
+                result = f"ERROR: execution failed: {e}"
 
             # Step 3: Reviewer
             passed, review_note = self.review_code(problem_text, stripped_code, result, approach)
