@@ -1,0 +1,23 @@
+---
+description: AIMO repo only — heavy eval/inference on cloud; agent does not run local GPU/HF batch jobs
+alwaysApply: false
+globs: examples/**/*.py,scripts/**/*.py,src/pipeline/**/*.py,src/evaluation/**/*.py,run_numina_evaluation.py,run_aimo_evaluation.py,docs/run-eval/**/*.md
+---
+
+# AIMO: 클라우드 평가·추론 (이 프로젝트 전용)
+
+이 규칙은 **AIMO 저장소**와 위 glob이 맞는 파일을 다룰 때만 적용한다. 다른 프로젝트·전역 설정용이 아니다.
+
+## 에이전트는 사용자 로컬 머신에서 무겁게 돌리지 않는다
+
+- Numina/대규모 JSONL 배치 평가, Qwen2.5-Math-7B 등 **HF 가중치 로드**, `run_numina_evaluation.py` / `run_aimo_evaluation.py`의 **실추론** 장시간 실행, 수 시간짜리 A/B 스크립트를 **터미널로 대신 실행하지 않는다**.
+- 기본 경로를 **로컬 CUDA / 로컬 HF**로 두지 않는다. “실험 돌려줘” 요청 시에도 **클라우드·원격** 절차를 안내한다.
+
+## 우선하는 실행처 (외부)
+
+- Vertex AI(Gemini), Vertex Endpoint, `OMI_REMOTE_INFERENCE_URL` 등 원격 추론, Hugging Face Jobs, Kaggle/노트북 등 **이 레포 문서에 맞는 클라우드 경로**.
+- 절차의 기준 문서: **`docs/run-eval/CLOUD_NUMINA_RUN.md`** · `VERTEX_AI.md` · `KAGGLE_RUN.md`. 스크립트 예: `scripts/eval/run_numina_vertex_cloud.sh` (Cloud Shell/Linux).
+
+## 로컬로 허용되는 것 (가벼운 것만)
+
+- `pytest`(mock·빠른 마커), `AIMO_FAST_TEST=1`, 구조/단위 테스트처럼 **대형 모델을 내려받지 않는** 검증.

@@ -1,0 +1,4 @@
+# Cloud Shell 등 /home 용량이 작을 때 — Vertex(Gemini) 스모크만
+# 사용: pip install --target /tmp/aimo-pypi -r requirements-cloudshell-smoke.txt
+# 전체 파이프라인(run_numina_evaluation + orchestrator)은 torch/transformers가 필요해 별도 경로(큰 디스크 VM 또는 아래 --target /tmp 전체 설치)를 본다.
+google-genai

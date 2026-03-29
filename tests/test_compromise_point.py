@@ -108,6 +108,11 @@ def test_compromise_point():
             decomposition_rate = decomposed_count / total_complex * 100
             print(f"📈 Decomposition Rate: {decomposition_rate:.1f}% ({decomposed_count}/{total_complex} complex problems)")
 
+    # 모듈에 직접 대입하면 __getattr__ 동기화가 가려지므로 제거 (test_config_compatibility 등과 공존)
+    if hasattr(config, "DECOMPOSITION_COMPLEXITY_THRESHOLD"):
+        delattr(config, "DECOMPOSITION_COMPLEXITY_THRESHOLD")
+
+
 def analyze_effectiveness():
     """Analyze how the compromise point affects different problem categories."""
     print("\n📈 Compromise Point Effectiveness Analysis")

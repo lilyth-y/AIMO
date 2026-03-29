@@ -24,6 +24,7 @@ MANIFEST
 # Virtual Env
 venv/
 .venv/
+.venv_hf_dl/
 env/
 .env
 
@@ -36,6 +37,8 @@ evaluation_output.txt
 *.json
 !generated_responses.json
 !generated_queries.json
+!data/numina_eval_balanced.json
+!data/eval/trusted_subset_seed.jsonl
 logs/
 results/
 
@@ -51,6 +54,10 @@ models/
 results.jsonl
 results_*.jsonl
 generated_*.json
+submission.parquet
+*.parquet
+*.zip
+adaptive_knowledge.json
 
 # Temporary files
 fix_*.py

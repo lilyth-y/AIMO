@@ -23,36 +23,38 @@ OMI (Orchestrated Math Interpreter)는 수학 문제를 체계적으로 오케�
 OMI/
 ├── src/                    # 메인 소스 코드
 │   ├── pipeline/          # 5-Stage 파이프라인
-│   │   └── orchestrator.py # 메인 오케스트레이터
 │   ├── evaluation/        # 평가 유틸리티
 │   ├── data/              # 데이터 로더
 │   └── kaggle/            # Kaggle 평가 관련
 │
-├── examples/              # 예제 스크립트
-├── tests/                 # 테스트 파일
-├── scripts/               # 유틸리티 스크립트
-├── docs/                  # 문서
-│   └── AIMO3/            # OMI3 프로젝트 리포트
-├── data/                  # 데이터 파일
-└── archive/               # 아카이브
-    └── legacy/            # 레거시 코드
+├── examples/               # 예제·평가 실행 스크립트
+├── tests/                  # 테스트
+├── scripts/                # 유틸리티 (setup_numina_dataset, organize_pd_project 등)
+├── docs/                   # 문서 (폴더별 정리, README가 인덱스)
+├── dashboard/              # 발표용 웹 대시보드 (Vite + React)
+├── notebooks/              # 파인튜닝 등 실험 노트북
+├── data/                   # 데이터 파일
+└── archive/                # 아카이브
+    └── legacy/             # 레거시 코드
 ```
 
-**상세 구조**: [docs/PD_PROJECT_STRUCTURE.md](docs/PD_PROJECT_STRUCTURE.md)
+**문서**: [docs/README.md](docs/README.md) (인덱스) · [docs/structure/PROJECT_STRUCTURE_AND_ORDER.md](docs/structure/PROJECT_STRUCTURE_AND_ORDER.md) (구조)
 
 ## 🚀 빠른 시작
 
 ### 1. 환경 설정
 
 ```bash
-# 의존성 설치
+# 의존성 설치 (로컬·일반 VM)
 pip install -r requirements.txt
 
-# 환경 변수 설정 (선택사항)
-export OMI_MODEL="Qwen/Qwen2-1.5B-Instruct"
-export OMI_QUANTIZATION="4bit"
+# 환경 변수 설정 (선택사항). 우선순위·기본값은 src/pipeline/settings.py 기준.
+export OMI_MODEL="Qwen/Qwen2.5-Math-1.5B-Instruct"   # 또는 AIMO_MODEL (폴백)
+export OMI_QUANTIZATION="4bit"                       # 또는 AIMO_QUANTIZATION (폴백)
 export HF_HOME="~/hf_cache"
 ```
+
+**Google Cloud Shell** 등 홈 디스크가 좁은 경우: 전체 `requirements.txt`를 그대로 깔면 용량이 부족해질 수 있다. Vertex만 먼저 쓸 때는 [docs/run-eval/CLOUD_NUMINA_RUN.md](docs/run-eval/CLOUD_NUMINA_RUN.md)와 `requirements-cloudshell-smoke.txt`를 본다.
 
 ### 2. 데이터셋 설정
 
@@ -92,11 +94,10 @@ python examples/run_numina_evaluation.py
 
 ## 📖 문서
 
-- [프로젝트 구조 (PD)](docs/PD_PROJECT_STRUCTURE.md)
-- [상세 프로젝트 구조](docs/PROJECT_STRUCTURE.md)
-- [AIMO3 프로젝트 리포트](docs/AIMO3/Report.md)
-- [NuminaMath 통합](docs/NUMINA_INTEGRATION.md)
-- [NuminaMath 1.5 업그레이드](docs/NUMINA_15_UPGRADE.md)
+- **[문서 인덱스 (폴더별 정리)](docs/README.md)** — 여기서 모든 문서를 카테고리별로 찾을 수 있습니다.
+- [프로젝트 구조·순서](docs/structure/PROJECT_STRUCTURE_AND_ORDER.md)
+- [AIMO3 리포트](docs/AIMO3/Report.md)
+- [NuminaMath 통합](docs/guides/NUMINA_INTEGRATION.md) · [1.5 업그레이드](docs/guides/NUMINA_15_UPGRADE.md)
 
 ## 🧪 테스트
 
@@ -125,18 +126,32 @@ python tests/test_real_imo_puzzle.py
 - `run_numina_evaluation.py` - NuminaMath 평가
 
 ### 문서 (docs/)
-- `AIMO3/` - AIMO3 프로젝트 리포트 및 문서
-- 기타 아키텍처 및 통합 문서
+- `README.md` - 문서 인덱스 (폴더별 정리)
+- `getting-started/` - 소개 · `structure/` - 구조 · `run-eval/` - 실행·평가
+- `finetuning-resources/` - 파인튜닝·재원 · `guides/` - 가이드 · `todo/` - 할 일
+- `AIMO3/` - 대회 리포트 · `archive/` - 과거 문서
 
 ### 아카이브 (archive/)
 - `legacy/AIMO_core/` - 초기 코어 프로젝트 (레거시)
 
 ## ⚙️ 환경 변수
 
-- `OMI_MODEL`: 사용할 모델 (예: `Qwen/Qwen2-1.5B-Instruct`)
-- `OMI_QUANTIZATION`: 양자화 설정 (예: `4bit`, `8bit`)
-- `HF_HOME`: HuggingFace 캐시 디렉토리
-- `TRANSFORMERS_CACHE`: Transformers 캐시 디렉토리
+단일 기준은 [`src/pipeline/settings.py`](src/pipeline/settings.py)입니다. 아래는 자주 쓰는 항목만 요약합니다.
+
+| 변수 | 의미 | 기본·비고 |
+|------|------|-----------|
+| `OMI_MODEL` | Hugging Face `repo_id` 또는 로컬 모델 경로 | 없으면 `AIMO_MODEL` → 기본 `Qwen/Qwen2.5-Math-7B-Instruct` |
+| `AIMO_MODEL` | `OMI_MODEL` 폴백 | 위와 동일 체인 |
+| `OMI_QUANTIZATION` | `4bit` / `8bit` / `none` | 없으면 `AIMO_QUANTIZATION` → 기본 `8bit` |
+| `AIMO_QUANTIZATION` | 양자화 폴백 | |
+| `OMI_REFINE_MAX_ITERATIONS` | Refine 루프 최대 반복 | 기본 `3` |
+| `OMI_REFINE_ENABLED` | Refine 루프 on/off | 기본 `true` |
+| `OMI_EXECUTOR_TIMEOUT` | 코드 실행 타임아웃(초) | 기본 `5.0` |
+| `AIMO_EXECUTOR_MEMORY_MB` | 실행 메모리 상한(MB), `0`이면 미사용 | 기본 `0` |
+| `AIMO_FAST_TEST` | `1`이면 빠른 테스트 모드 | 기본 `0` |
+| `OMI_LOG_PATH` | 평가 로그 JSONL 경로 | 기본 `logs/eval_log.jsonl` |
+| `HF_HOME` | Hugging Face 캐시 루트 | 선택 |
+| `TRANSFORMERS_CACHE` | Transformers 캐시 | 선택 |
 
 ## 📊 평가 데이터셋
 
@@ -145,7 +160,7 @@ python tests/test_real_imo_puzzle.py
 
 ## 🔧 개발
 
-프로젝트 구조 정리 및 개발 가이드는 [docs/PROJECT_ORGANIZATION.md](docs/PROJECT_ORGANIZATION.md)를 참조하세요.
+문서 전체 목록과 구조는 [docs/README.md](docs/README.md)를 참조하세요.
 
 ## 📄 라이선스
 
