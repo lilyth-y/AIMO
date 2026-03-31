@@ -209,8 +209,33 @@ def _prediction_text(raw: Any) -> str:
     if raw is None:
         return ""
     if isinstance(raw, dict):
+        # Common keys used by custom containers / HF serving wrappers
+        for k in ("text", "generated_text", "output", "response", "completion"):
+            v = raw.get(k)
+            if isinstance(v, str) and v.strip():
+                return v
+        # Sometimes nested: {"predictions":[{"text":...}]} or {"outputs":[...]}
+        for k in ("predictions", "outputs", "candidates"):
+            v = raw.get(k)
+            if isinstance(v, list) and v:
+                if isinstance(v[0], dict):
+                    return _prediction_text(v[0])
+                if isinstance(v[0], str) and v[0].strip():
+                    return v[0]
         return str(raw.get("text", "") or "")
-    return str(raw)
+    # Protobuf Value/Message -> dict so we can find `text` keys
+    try:
+        from google.protobuf import json_format  # type: ignore
+        from google.protobuf.message import Message  # type: ignore
+
+        if isinstance(raw, Message):
+            as_dict = json_format.MessageToDict(raw)
+            if isinstance(as_dict, dict):
+                return _prediction_text(as_dict)
+    except Exception:
+        pass
+    s = str(raw)
+    return s if s is not None else ""
 
 
 def _default_max_new_tokens() -> int:
