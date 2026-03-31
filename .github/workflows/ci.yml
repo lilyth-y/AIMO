@@ -50,10 +50,9 @@ jobs:
           "
 
       - name: Run tests
-        run: |
-          export PYTHONPATH=src
-          pytest tests/ -v --ignore=tests/test_evaluation_scripts.py -x -q 2>/dev/null || true
-        continue-on-error: true
+        env:
+          PYTHONPATH: src
+        run: pytest tests/ -q --tb=short --ignore=tests/test_evaluation_scripts.py
 
   docker-build:
     runs-on: ubuntu-latest

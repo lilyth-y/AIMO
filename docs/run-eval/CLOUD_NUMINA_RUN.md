@@ -18,13 +18,26 @@ Vertex가 잡히면 **로컬 HF 7B 로드 없이** API 호출만 한다. 로그�
 `requirements.txt` / `scripts/eval/run_numina_vertex_cloud.sh` 가 없다면 **디렉터리가 잘못됐거나 클론이 없는 것**이다.
 
 ```bash
-git clone https://github.com/<your-org>/AIMO.git   # 실제 URL로
+git clone https://github.com/lilyth-y/AIMO.git
 cd AIMO
 git pull   # scripts/eval/·문서가 없으면 최신 브랜치를 당긴다
 test -f requirements.txt && test -f scripts/eval/run_numina_vertex_cloud.sh && echo OK || echo "WRONG DIRECTORY — cd into AIMO repo root"
 ```
 
 이후 모든 `pip` / `python` / `bash scripts/...` 는 **`cd AIMO` 한 뒤** 실행한다.
+
+### 0.5) GCP 고정 프로필·연결 스모크 (권장)
+
+프로젝트·버킷·엔드포인트 ID·리전 정리: [../vertex/AIMO_GCP_PROFILE.md](../vertex/AIMO_GCP_PROFILE.md).  
+의존성을 최소로 깐 뒤 **연결만** 확인하려면 (Cloud Shell):
+
+```bash
+cd ~/AIMO
+# requirements-cloudshell-smoke.txt 로 PYTHONPATH 설정했다면 그대로
+bash scripts/vertex/run_aimo_gcp_smoke.sh
+```
+
+성공 시 Vertex SDK·Gemini·엔드포인트 호출이 한 번씩 통과한다. 이후 §1에서 전체 스택을 설치하고 Numina를 돌린다.
 
 ### 1) 의존성 설치
 

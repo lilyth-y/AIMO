@@ -22,6 +22,8 @@
   - Kaggle: Settings → **Accelerator: GPU**, **Internet: On** (HuggingFace에서 모델 다운로드).
   - `OMI_MODEL`이 올바른지 확인 (로컬 경로 또는 `Qwen/Qwen2.5-Math-1.5B-Instruct` 등).
 - **대응**: GPU 켜기, 인터넷 켜기, 또는 Dataset으로 모델 미리 올려 두고 `OMI_MODEL`을 해당 경로로 설정.
+- **로컬에서 `Local model error: 'dict' object has no attribute 'bos_token_id'`**  
+  → `solver.py`에서 `generation_config`를 **dict가 아니라 GenerationConfig 객체**로 pipeline에 넘기도록 수정해 두었음. 동일 오류가 다시 나오면 pipeline 호출부에서 dict 전달 여부 확인.
 
 ### (2) 타임아웃으로 전부 실패
 
@@ -47,6 +49,13 @@
 - **증상**: `method`가 `all_failed`, 실행 결과에 `Error`/`SyntaxError` 등.
 - **원인**: 생성된 코드가 Kaggle/로컬 환경에서 실행되지 않음(금지된 모듈, 메모리 부족 등).
 - **대응**: 로그에서 `execution_result` 또는 `error` 필드 확인. 필요하면 로컬에서 소수 문항만 실행해 어떤 코드가 실패하는지 확인.
+
+### (5b) 실행 오류 접두 불일치 (`Error:` vs `ERROR:`) — 투표·검증 오염
+
+- **증상**: 실행이 실패했는데도 “검증 통과” 또는 투표에서 잘못된 후보가 선택됨; 정확도 리포트와 로그의 `verified`가 어긋남.
+- **원인**: 이전에는 샌드박스 출력이 `Error:` / `ERROR:` 등으로 달라 **실행 실패를 감지하지 못한** 경우가 있었음.
+- **대응**: `src/pipeline/orchestrator_helpers.py` 의 `is_execution_error_output` 로 통일 감지. 회귀는 `tests/test_execution_error_output.py` 참고.
+- **주의**: Numina 평가에서 `variables={}`이면 **리포트 정확도는 `check_answer_correctness(reference, predicted)`** 기준 — 로그의 `verified`와 동일하지 않을 수 있음 ([ACCURACY_ANALYSIS_AND_PLAN.md](ACCURACY_ANALYSIS_AND_PLAN.md) §2.2).
 
 ### (6) 답 추출 실패
 

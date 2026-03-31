@@ -1,0 +1,16 @@
+# Cloud Shell / CI — 레포 루트에서:
+#   gcloud builds submit --project=gen-lang-client-0300734101 --region=asia-northeast3 \
+#     --config=docker/vertex-eval/cloudbuild.yaml --substitutions=_IMAGE=asia-northeast3-docker.pkg.dev/gen-lang-client-0300734101/aimo/vertex-eval:latest .
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-f"
+      - "docker/vertex-eval/Dockerfile"
+      - "-t"
+      - "${_IMAGE}"
+      - "."
+images:
+  - "${_IMAGE}"
+substitutions:
+  _IMAGE: "asia-northeast3-docker.pkg.dev/gen-lang-client-0300734101/aimo/vertex-eval:latest"
