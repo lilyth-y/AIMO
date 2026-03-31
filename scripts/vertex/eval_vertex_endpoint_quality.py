@@ -294,7 +294,16 @@ def _endpoint_predict_with_retries(
     for attempt in range(n):
         t0 = time.time()
         try:
-            resp = endpoint.predict(instances=instances, timeout=predict_timeout)
+            # Some google-cloud-aiplatform versions don't accept `timeout=` on Endpoint.predict.
+            # Prefer passing it, but fall back to default if the SDK rejects the kwarg.
+            try:
+                resp = endpoint.predict(instances=instances, timeout=predict_timeout)
+            except TypeError as e:
+                msg = str(e)
+                if "timeout" in msg and ("unexpected" in msg or "got an unexpected keyword" in msg):
+                    resp = endpoint.predict(instances=instances)
+                else:
+                    raise
             dt = time.time() - t0
             trace.append(
                 {
