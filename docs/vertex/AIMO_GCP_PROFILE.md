@@ -1,6 +1,6 @@
 # AIMO GCP 고정 프로필 (레포·실계정 기준)
 
-GitHub: `https://github.com/lilyth-y/AIMO.git` — Cloud Shell 등에서 `git clone` 후 루트에서 스크립트를 실행한다.
+GitHub: `https://github.com/lilyth-y/AIMO.git` — 기본 브랜치는 **`changes`** (`main` 없음). Cloud Shell에서는 `git clone` 후 `git checkout changes` 또는 `git pull origin changes` 로 맞춘다.
 
 `gcloud`·Vertex API로 **확인한 값**을 기본으로 쓴다. 프로젝트가 바뀌면 본 문서와 [GCP_AUTH.md](GCP_AUTH.md)를 함께 갱신한다.
 
