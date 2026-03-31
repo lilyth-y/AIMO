@@ -1,0 +1,10 @@
+# Local NVIDIA GPU (e.g. RTX 4060 Laptop 8GB)
+# ------------------------------------------------------------
+# Root requirements.txt installs CPU-only torch. For CUDA:
+#   1) pip uninstall torch torchvision torchaudio -y
+#   2) Install a CUDA build from https://pytorch.org/get-started/locally/
+#      Example (CUDA 11.8 wheels):
+#        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+#      Or CUDA 12.x: use the cu121 / cu124 index shown on that page.
+#   3) pip install -r requirements-gpu.txt
+bitsandbytes>=0.43.0

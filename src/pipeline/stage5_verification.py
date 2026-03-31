@@ -35,6 +35,7 @@ except ImportError:
     simplify = factor = expand = trigsimp = ratsimp = cancel = nsimplify = None
 
 from .logger import get_logger
+from .orchestrator_helpers import is_execution_error_output
 
 logger = get_logger()
 
@@ -54,8 +55,8 @@ class VerificationRouter:
         Returns:
             검증 통과 여부
         """
-        # Hard fail on propagated execution error strings
-        if isinstance(answer, str) and answer.strip().startswith('ERROR:'):
+        # Hard fail on propagated execution error strings (Error: from executor, legacy ERROR:)
+        if isinstance(answer, str) and is_execution_error_output(answer):
             logger.warning("Verification Failed: Execution error propagated")
             return False
         

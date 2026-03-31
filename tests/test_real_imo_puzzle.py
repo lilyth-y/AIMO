@@ -5,6 +5,10 @@
 import sys
 import os
 import json
+
+import pytest
+
+pytestmark = pytest.mark.slow
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 sys.path.insert(0, os.path.dirname(__file__))
 

@@ -1,0 +1,24 @@
+# gcloud builds submit / Cloud Build 소스 tarball 축소 (Docker 컨텍스트에 불필요한 대용량 제외)
+# vertex-eval 등은 src/, scripts/, docker/ 만 필요
+
+.git/
+.github/
+.cursor/
+**/__pycache__/
+**/.venv/
+**/venv/
+**/node_modules/
+dashboard/
+data/
+docs/
+archive/
+notebooks/
+examples/
+results/
+logs/
+.cache/
+models/
+*.log
+*.parquet
+*.zip
+*.safetensors

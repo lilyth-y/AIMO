@@ -4,6 +4,7 @@ Stage 1: Labeling & Semantic Decomposition
 - Variable Extraction: Extract N, K, P, etc.
 """
 
+import json
 import re
 from typing import Dict, Any
 
@@ -44,17 +45,17 @@ class ProblemAnalyzer:
             'rectangle', 'square', 'trapezoid', 'rhombus'
         ]
         
-        # Number Theory keywords
+        # Number Theory keywords (avoid bare 'factor' — conflicts with polynomial factoring)
         nt_keywords = [
             'mod', 'prime', 'gcd', 'lcm', 'divisible', 'integer',
-            'factor', 'congruence', 'diophantine', 'modular',
+            'congruence', 'diophantine', 'modular',
             'remainder', 'divided by', 'divisor', 'multiple'
         ]
         
         # Algebra keywords
         alg_keywords = [
             'polynomial', 'equation', 'quadratic', 'cubic', 'root',
-            'factor', 'expand', 'simplify', 'inequality', 'matrix'
+            'factor', 'expand', 'simplify', 'inequality', 'matrix', 'system'
         ]
         
         # Combinatorics keywords
@@ -71,9 +72,11 @@ class ProblemAnalyzer:
             'differentiate', 'integrate', 'critical point'
         ]
         
-        # Check each domain
+        # Check each domain (polynomial factoring is algebra, not NT "factorization")
         if any(kw in problem_lower for kw in geo_keywords):
             return "Geometry"
+        if 'polynomial' in problem_lower:
+            return "Algebra"
         elif any(kw in problem_lower for kw in nt_keywords):
             return "Number Theory"
         elif any(kw in problem_lower for kw in alg_keywords):
@@ -101,6 +104,54 @@ class ProblemAnalyzer:
             if key not in variables:
                 variables[key] = int(val)
         return variables
+
+    def classify_with_llm(self, problem_text: str) -> Dict[str, Any]:
+        """
+        Optional LLM-based Stage1 classifier.
+        Returns lightweight structured hints and falls back gracefully.
+        """
+        try:
+            from .vertex_inference import is_vertex_configured, generate_vertex
+            from .orchestrator_helpers import classify_problem, is_execution_error_output
+            from .reasoning_utils import assess_complexity
+        except Exception:
+            return {}
+
+        if not is_vertex_configured():
+            return {}
+
+        prompt = (
+            "You are a strict JSON classifier for math problems.\n"
+            "Return ONLY JSON with keys: problem_type, complexity_score.\n"
+            "problem_type must be one of: computational, geometric, proof, complex.\n"
+            "complexity_score must be an integer from 0 to 30.\n"
+            f"Problem:\n{problem_text}\n"
+        )
+        raw = generate_vertex(prompt, max_output_tokens=120)
+        if not raw or is_execution_error_output(raw):
+            return {}
+
+        try:
+            text = raw.strip()
+            if "```" in text:
+                text = text.replace("```json", "").replace("```", "").strip()
+            parsed = json.loads(text)
+            problem_type = str(parsed.get("problem_type", "")).strip().lower()
+            complexity_score = int(parsed.get("complexity_score", -1))
+            if problem_type not in {"computational", "geometric", "proof", "complex"}:
+                return {}
+            if complexity_score < 0 or complexity_score > 30:
+                return {}
+            return {
+                "problem_type": problem_type,
+                "complexity_score": complexity_score,
+            }
+        except Exception:
+            # If model output is malformed, ignore and keep deterministic heuristics.
+            return {
+                "problem_type": classify_problem(problem_text),
+                "complexity_score": assess_complexity(problem_text),
+            }
 
 if __name__ == "__main__":
     analyzer = ProblemAnalyzer()

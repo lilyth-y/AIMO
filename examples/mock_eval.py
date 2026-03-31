@@ -1,6 +1,9 @@
 """
-Quick evaluation with Mock Solver
-No LLM loading - instant testing
+Quick smoke: orchestrator + MockSolver (no HF load after solver swap).
+
+MockSolver는 ``AIMO_MOCK_GENERATED_CODE`` 로 고정된 ``print(...)`` 만보냅니다.
+문제별 정답과 맞추는 평가가 아니라, 파이프라인이 돌아가는지 보는 용도입니다.
+실제 정확도는 ``examples/run_numina_evaluation.py`` 등으로 측정하세요.
 """
 
 import sys
@@ -100,14 +103,15 @@ def evaluate_mock(orchestrator, problems, max_problems=10):
     print(f"\n{'='*70}")
     print(f"MOCK RESULTS: {correct}/{total} = {accuracy:.1f}%")
     print(f"{'='*70}")
-    print("\n✅ Pipeline is working!")
-    print("📊 This validates the evaluation infrastructure")
-    print("🚀 Ready to integrate real LLM when system resources allow")
+    print("\n✅ Pipeline ran end-to-end (executor + extraction + return shape).")
+    print("📊 Match rate vs labels is NOT meaningful for a fixed print() mock.")
+    print("🚀 Use a real solver / Vertex for accuracy.")
     
     return accuracy, results
 
 if __name__ == "__main__":
-    print("🔧 Mock Evaluation - Testing Pipeline")
+    os.environ.setdefault("AIMO_MOCK_GENERATED_CODE", "print(0)")
+    print("🔧 Mock smoke (fixed code from AIMO_MOCK_GENERATED_CODE — not task accuracy)")
     print("="*70)
     
     print("\nLoading problems...")

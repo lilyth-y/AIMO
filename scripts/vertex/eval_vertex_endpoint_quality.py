@@ -11,6 +11,8 @@ Vertex Online Prediction 엔드포인트에 대해 **답 품질(정확도)** 샘
   끄기: `--no-verify-agent` 또는 `VERTEX_VERIFY_AGENT=0`.
 - BigQuery: `--bq-table project.dataset.table` 로 eval 종료 후 JSONL 행을 동일 run_id로 적재.
   `vertex_bigquery.py` + `pip install -r requirements-vertex-bq.txt`. 자동 생성: 기본 on, 끄기 `--bq-no-create`.
+- 디버그: `--dump-predictions N` — 처음 N문항에서 predict 성공 시 원시 `predictions` 페이로드를 stderr에 덤프(스키마 확인).
+  Cloud Shell 최소 설치: `docs/run-eval/CLOUD_SHELL_ENDPOINT_EVAL.md`, `requirements-cloudshell-endpoint-eval.txt`.
 
 사용 예:
   set PROJECT_ID=...
@@ -36,7 +38,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 
 # 프로젝트 루트 → src (evaluation, pipeline)
 _ROOT = Path(__file__).resolve().parents[2]
@@ -206,36 +208,101 @@ def build_prompt_legacy(problem_text: str) -> str:
 
 
 def _prediction_text(raw: Any) -> str:
+    """
+    Vertex `predictions[0]` 는 dict, protobuf Struct/Value, str(JSON), list 등 혼재한다.
+    생성 텍스트 후보를 깊이 우선으로 찾는다.
+    """
     if raw is None:
         return ""
-    if isinstance(raw, dict):
-        # Common keys used by custom containers / HF serving wrappers
-        for k in ("text", "generated_text", "output", "response", "completion"):
-            v = raw.get(k)
-            if isinstance(v, str) and v.strip():
-                return v
-        # Sometimes nested: {"predictions":[{"text":...}]} or {"outputs":[...]}
-        for k in ("predictions", "outputs", "candidates"):
-            v = raw.get(k)
-            if isinstance(v, list) and v:
-                if isinstance(v[0], dict):
-                    return _prediction_text(v[0])
-                if isinstance(v[0], str) and v[0].strip():
-                    return v[0]
-        return str(raw.get("text", "") or "")
-    # Protobuf Value/Message -> dict so we can find `text` keys
+
+    # Protobuf Message / Struct / Value -> dict (vertex_endpoint_inference 와 동일 계열)
     try:
         from google.protobuf import json_format  # type: ignore
         from google.protobuf.message import Message  # type: ignore
 
         if isinstance(raw, Message):
-            as_dict = json_format.MessageToDict(raw)
-            if isinstance(as_dict, dict):
-                return _prediction_text(as_dict)
+            as_dict = json_format.MessageToDict(raw, preserving_proto_field_name=True)
+            return _prediction_text(as_dict)
     except Exception:
         pass
-    s = str(raw)
-    return s if s is not None else ""
+
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return ""
+        # 서버가 JSON 문자열 한 덩어리로 줄 때
+        if (s.startswith("{") and s.endswith("}")) or (s.startswith("[") and s.endswith("]")):
+            try:
+                parsed = json.loads(s)
+                inner = _prediction_text(parsed)
+                if inner:
+                    return inner
+            except Exception:
+                pass
+        return s
+
+    if isinstance(raw, (bytes, bytearray)):
+        try:
+            return _prediction_text(raw.decode("utf-8", errors="replace"))
+        except Exception:
+            return ""
+
+    if isinstance(raw, list):
+        for item in raw:
+            t = _prediction_text(item)
+            if t:
+                return t
+        return ""
+
+    if isinstance(raw, dict):
+        # 우선순위: 일반 서빙 / HF / OpenAI 호환
+        for k in (
+            "text",
+            "generated_text",
+            "output",
+            "response",
+            "completion",
+            "content",
+            "message",
+            "answer",
+            "body",
+            "result",
+            "prediction",
+        ):
+            if k not in raw:
+                continue
+            v = raw[k]
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+            t = _prediction_text(v)
+            if t:
+                return t
+        # OpenAI-style chat
+        ch = raw.get("choices")
+        if isinstance(ch, list) and ch:
+            t = _prediction_text(ch[0])
+            if t:
+                return t
+        # Nested containers
+        for k in ("predictions", "outputs", "candidates", "data"):
+            v = raw.get(k)
+            if v is not None:
+                t = _prediction_text(v)
+                if t:
+                    return t
+        # 마지막 수단: 값이 전부 문자열인 필드 중 가장 긴 것(메타데이터 키 제외)
+        skip_keys = {"status", "code", "error", "model", "id", "object", "finish_reason"}
+        best = ""
+        for k, v in raw.items():
+            if k in skip_keys:
+                continue
+            if isinstance(v, str) and len(v) > len(best):
+                best = v
+        if best.strip():
+            return best.strip()
+        return ""
+
+    return str(raw) if raw is not None else ""
 
 
 def _default_max_new_tokens() -> int:
@@ -256,14 +323,14 @@ def _predict_timeout_max_cap() -> float:
 
 def _effective_predict_timeout(raw: float) -> float:
     """
-    Endpoint.predict(timeout=None) 또는 매우 짧은 값은 gRPC 쪽에서 ~60초 전후로 끊겨
-    503 \"Took too long to respond\" 처럼 보인다. 항상 충분한 초 단위를 넘긴다.
-    최종값은 VERTEX_PREDICT_TIMEOUT_MAX(기본 600)으로 상한.
+    - 양수 초: 그대로 사용(상한 VERTEX_PREDICT_TIMEOUT_MAX).
+    - <=0: SDK에 타임아웃을 안 넘기면 gRPC 기본 ~60초 한도가 걸릴 수 있어
+      VERTEX_PREDICT_TIMEOUT_FLOOR(기본 60)로 대체.
+    벽시계 한도는 `_endpoint_predict_with_retries`의 `fut.result(timeout=...)`가 추가로 강제.
     """
     max_cap = _predict_timeout_max_cap()
     # Default "floor" is only used when caller passes <=0.
-    # Keep it modest so smoke runs don't waste minutes per call in Cloud Shell.
-    floor = float(os.getenv("VERTEX_PREDICT_TIMEOUT_FLOOR", "180"))
+    floor = float(os.getenv("VERTEX_PREDICT_TIMEOUT_FLOOR", "60"))
     if raw <= 0:
         r0 = min(floor, max_cap) if max_cap > 0 else floor
         sys.stderr.write(
@@ -373,6 +440,7 @@ def vertex_predict_with_format_retries(
     predict_timeout: float,
     transient_retries: int = 3,
     retry_delay_s: float = 5.0,
+    on_first_raw_response: Optional[Callable[[Any], None]] = None,
 ) -> Dict[str, Any]:
     """
     <ANS> 단일 블록 strict 통과할 때까지 최대 (1 + max_format_retries)회 Vertex predict.
@@ -417,6 +485,11 @@ def vertex_predict_with_format_retries(
             last_err = pred_err
             text = ""
         else:
+            if attempt == 0 and callable(on_first_raw_response):
+                try:
+                    on_first_raw_response(resp)
+                except Exception as e:
+                    sys.stderr.write(f"[vertex_eval] on_first_raw_response failed: {e}\n")
             preds = getattr(resp, "predictions", None) or []
             raw = preds[0] if preds else None
             text = _prediction_text(raw)
@@ -679,6 +752,51 @@ def _sanitize_for_json(obj: Any) -> Any:
     return obj
 
 
+def _dump_prediction_payload(
+    sample_idx: int,
+    resp: Any,
+    *,
+    max_chars: int = 8000,
+) -> None:
+    """stderr: 원시 predict 응답 구조 디버그(스키마 확인용)."""
+    try:
+        preds = getattr(resp, "predictions", None)
+        if preds is None:
+            preds = []
+        try:
+            preds_list = list(preds) if preds is not None else []
+        except Exception:
+            preds_list = [preds]
+        dumped: List[Any] = []
+        for p in preds_list[:3]:
+            try:
+                from google.protobuf import json_format  # type: ignore
+                from google.protobuf.message import Message  # type: ignore
+
+                if isinstance(p, Message):
+                    dumped.append(json_format.MessageToDict(p, preserving_proto_field_name=True))
+                else:
+                    dumped.append(_sanitize_for_json(p))
+            except Exception:
+                dumped.append(_sanitize_for_json(p))
+        try:
+            plen = len(list(preds)) if preds is not None else 0
+        except Exception:
+            plen = len(preds_list)
+        block = {
+            "sample_idx": sample_idx,
+            "predictions_len": plen,
+            "predictions_head": dumped,
+            "deployed_model_id": getattr(resp, "deployed_model_id", None),
+        }
+        s = json.dumps(block, ensure_ascii=False, indent=2)
+        if len(s) > max_chars:
+            s = s[:max_chars] + "\n... [truncated]"
+        sys.stderr.write(f"[vertex_eval dump-predictions] sample {sample_idx}:\n{s}\n")
+    except Exception as e:
+        sys.stderr.write(f"[vertex_eval dump-predictions] sample {sample_idx}: failed: {e}\n")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Vertex 엔드포인트 답 품질 샘플 평가")
     ap.add_argument(
@@ -720,9 +838,19 @@ def main() -> int:
         type=float,
         default=float(os.getenv("VERTEX_PREDICT_TIMEOUT_SECONDS", "600")),
         help=(
-            "SDK predict 타임아웃(초). None/0/짧은 값은 gRPC ~60초 한도로 503이 난다. "
-            "기본 600; 상한 VERTEX_PREDICT_TIMEOUT_MAX(기본 600), 최소 VERTEX_PREDICT_TIMEOUT_MIN(기본 90). "
-            "env: VERTEX_PREDICT_TIMEOUT_SECONDS"
+            "predict 타임아웃(초). 스레드 fut.result 로 벽시계 한도도 동일하게 적용. "
+            "스모크는 예: --predict-timeout 20. 상한 VERTEX_PREDICT_TIMEOUT_MAX(기본 600). "
+            "<=0 이면 VERTEX_PREDICT_TIMEOUT_FLOOR(기본 60)로 치환. env: VERTEX_PREDICT_TIMEOUT_SECONDS"
+        ),
+    )
+    ap.add_argument(
+        "--dump-predictions",
+        type=int,
+        default=int(os.getenv("VERTEX_EVAL_DUMP_PREDICTIONS", "0")),
+        metavar="N",
+        help=(
+            "처음 N개 문제에서 predict 성공 직후 원시 predictions 페이로드를 stderr에 덤프(스키마 확인). "
+            "env: VERTEX_EVAL_DUMP_PREDICTIONS"
         ),
     )
     ap.add_argument(
@@ -749,7 +877,10 @@ def main() -> int:
         "--max-format-retries",
         type=int,
         default=int(os.getenv("VERTEX_MAX_FORMAT_RETRIES", "3")),
-        help="<ANS> strict 불통과 시 추가 생성 횟수. 0이면 1회만. env: VERTEX_MAX_FORMAT_RETRIES",
+        help=(
+            "<ANS> strict 불통과 시 추가 생성 횟수. 0이면 strict-first 1회만(스모크 권장). "
+            "비교용 구 프롬프트는 --no-format-gate. env: VERTEX_MAX_FORMAT_RETRIES"
+        ),
     )
     ap.add_argument(
         "--retry-temperature",
@@ -911,6 +1042,8 @@ def main() -> int:
                     text = ""
                     ext_err = pred_err
                 else:
+                    if int(args.dump_predictions) > j:
+                        _dump_prediction_payload(j, resp)
                     preds = getattr(resp, "predictions", None) or []
                     raw = preds[0] if preds else None
                     text = _prediction_text(raw)
@@ -946,6 +1079,11 @@ def main() -> int:
                     predict_timeout=predict_timeout_eff,
                     transient_retries=int(args.vertex_predict_retries),
                     retry_delay_s=float(args.vertex_predict_retry_delay),
+                    on_first_raw_response=(
+                        (lambda r, jj=j: _dump_prediction_payload(jj, r))
+                        if int(args.dump_predictions) > j
+                        else None
+                    ),
                 )
                 text = gen.get("text") or ""
                 dt = float(gen.get("latency_s", 0))
@@ -1102,6 +1240,8 @@ def main() -> int:
         "predict_timeout_requested": float(args.predict_timeout),
         "predict_timeout_effective": predict_timeout_eff,
         "predict_timeout_max_seconds": _predict_timeout_max_cap(),
+        "vertex_predict_retries": int(args.vertex_predict_retries),
+        "dump_predictions": int(args.dump_predictions),
         "seed": args.seed,
         "data_file": args.data_file,
         "output": out_path,

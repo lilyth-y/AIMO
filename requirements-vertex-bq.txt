@@ -1,0 +1,3 @@
+# Vertex 평가 로그 → BigQuery (옵션)
+# pip install -r requirements-vertex-bq.txt
+google-cloud-bigquery==3.25.0

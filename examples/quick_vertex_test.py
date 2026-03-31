@@ -18,6 +18,7 @@ sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, "src"))
 
 def main():
+    from pipeline.orchestrator_helpers import is_execution_error_output
     from pipeline.vertex_inference import is_vertex_configured, generate_vertex
 
     if not is_vertex_configured():
@@ -32,7 +33,7 @@ def main():
     out = generate_vertex(prompt, max_output_tokens=50)
     print("Prompt:", prompt)
     print("Response:", out[:200] if out else "(empty)")
-    if out and not out.startswith("ERROR"):
+    if out and not is_execution_error_output(out):
         print("OK - Vertex 연동 정상 동작")
         return 0
     print("실패 - 위 응답 확인")

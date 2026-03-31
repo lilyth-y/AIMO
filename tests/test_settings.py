@@ -75,6 +75,24 @@ class TestSettings:
         """Use voting 테스트"""
         s = Settings()
         assert isinstance(s.use_voting, bool)
+
+    def test_optimize_accuracy_defaults(self, monkeypatch):
+        monkeypatch.delenv("AIMO_OPTIMIZE_ACCURACY", raising=False)
+        monkeypatch.delenv("OMI_USE_VOTING", raising=False)
+        monkeypatch.delenv("OMI_NUM_CANDIDATES", raising=False)
+        s = Settings()
+        assert s.optimize_accuracy is False
+        assert s.use_voting is False
+        assert s.num_candidates == 3
+
+    def test_optimize_accuracy_on(self, monkeypatch):
+        monkeypatch.setenv("AIMO_OPTIMIZE_ACCURACY", "1")
+        monkeypatch.delenv("OMI_USE_VOTING", raising=False)
+        monkeypatch.delenv("OMI_NUM_CANDIDATES", raising=False)
+        s = Settings()
+        assert s.optimize_accuracy is True
+        assert s.use_voting is True
+        assert s.num_candidates == 4
     
     def test_log_path(self):
         """Log path 테스트"""

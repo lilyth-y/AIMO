@@ -14,6 +14,7 @@
 |----------|------|
 | [../run-eval/RALPH_VERTEX.md](../run-eval/RALPH_VERTEX.md) | Ralph·Custom Job·게이트 |
 | [../run-eval/CLOUD_NUMINA_RUN.md](../run-eval/CLOUD_NUMINA_RUN.md) | Numina 클라우드 전용 |
+| [../run-eval/CLOUD_SHELL_ENDPOINT_EVAL.md](../run-eval/CLOUD_SHELL_ENDPOINT_EVAL.md) | Cloud Shell 최소 설치·엔드포인트 eval 스모크 |
 
 ## 스크립트 (요약)
 

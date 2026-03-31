@@ -6,7 +6,7 @@ P6: 평가 결과로 문서 표 업데이트용 스크립트
   python scripts/update_math_level_from_results.py results/numina_balanced_results.json results/aime_results.json
 
 results JSON은 evaluation_utils.save_results() 형식(또는 results 리스트 + total/correct 등)을 기대합니다.
-출력: docs/MATH_REASONING_LEVEL_AND_IMPROVEMENTS.md 의 "현재 수준" 칸에 붙여넣을 수 있는 문장/표 조각.
+출력: docs/archive/MATH_REASONING_LEVEL_AND_IMPROVEMENTS.md 의 "현재 수준" 칸에 붙여넣을 문장/표 조각.
 """
 
 import json
@@ -82,7 +82,7 @@ def main():
         print("No result files processed. Usage: python scripts/update_math_level_from_results.py [result.json ...]")
         return
 
-    print("\n--- 현재 수준 칸에 붙여넣을 문장 (docs/MATH_REASONING_LEVEL_AND_IMPROVEMENTS.md) ---\n")
+    print("\n--- 현재 수준 칸에 붙여넣을 문장 (docs/archive/MATH_REASONING_LEVEL_AND_IMPROVEMENTS.md) ---\n")
     for s in summaries:
         acc = s["accuracy"]
         total = s["total"]

@@ -3,6 +3,7 @@ import Overview from './pages/Overview'
 import Accuracy from './pages/Accuracy'
 import Process from './pages/Process'
 import ProblemViewer from './pages/ProblemViewer'
+import Comparison from './pages/Comparison'
 
 function NavLink({ to, label }: { to: string; label: string }) {
   const location = useLocation()
@@ -39,6 +40,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             <NavLink to="/accuracy" label="정확도" />
             <NavLink to="/process" label="풀이 과정" />
             <NavLink to="/problems" label="문제/수식" />
+            <NavLink to="/comparison" label="비교/분석" />
           </nav>
         </div>
       </header>
@@ -64,6 +66,7 @@ function App() {
         <Route path="/accuracy" element={<Accuracy />} />
         <Route path="/process" element={<Process />} />
         <Route path="/problems" element={<ProblemViewer />} />
+        <Route path="/comparison" element={<Comparison />} />
       </Routes>
     </Layout>
   )

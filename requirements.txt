@@ -6,6 +6,11 @@ numpy
 protobuf
 grpcio
 pyarrow
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-grpc
+# Optional: Vertex AI (Gemini) — see requirements-vertex.txt
+# Local NVIDIA GPU: default torch line below is CPU-only. Use requirements-gpu.txt instead.
 # Runtime / model stack
 transformers
 accelerate

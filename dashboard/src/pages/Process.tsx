@@ -13,6 +13,15 @@ interface Problem {
   question_type: string
 }
 
+interface EvalData {
+  query: string;
+  response: string;
+  reasoning_steps: { step: string; params: any }[];
+  result: { output: string | null; error: string | null; traceback: string | null };
+  tools: string[];
+  type: string;
+}
+
 /* ─────── XAI 유형별 난이도 & 설명 ─────── */
 const TYPE_META: Record<string, { difficulty: number; color: string; xaiNote: string }> = {
   Geometry: {
@@ -106,11 +115,18 @@ export default function Process() {
   const [geoStep, setGeoStep] = useState(0)
   const [problems, setProblems] = useState<Problem[]>([])
   const [selectedIdx, setSelectedIdx] = useState(0)
+  const [evalData, setEvalData] = useState<EvalData[]>([])
+  const [selectedEvalIdx, setSelectedEvalIdx] = useState(0)
 
   useEffect(() => {
     fetch('/numina_eval_balanced.json')
       .then(r => r.json())
       .then(d => setProblems(d))
+      .catch(() => { })
+
+    fetch('/eval_data.json')
+      .then(r => r.json())
+      .then(d => setEvalData(d))
       .catch(() => { })
   }, [])
 
@@ -133,6 +149,7 @@ export default function Process() {
   }, [problems])
 
   const selectedProblem = problems[selectedIdx]
+  const selectedEval = evalData[selectedEvalIdx]
   const Md = ({ children }: { children: string }) => (
     <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{children}</ReactMarkdown>
   )
@@ -341,6 +358,149 @@ export default function Process() {
                     <Md>{selectedProblem.solution}</Md>
                   </div>
                 </details>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ────────── Human-like CoT vs Program-Aided CoT ────────── */}
+      {evalData.length > 0 && (
+        <section className="space-y-6">
+          <h2 className="text-2xl font-bold flex items-center gap-3">
+            <span className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-[10px] font-black text-emerald-400">P</span>
+            Human-like CoT vs Program-Aided CoT
+          </h2>
+          <p className="text-slate-400 text-sm max-w-4xl leading-relaxed">
+            단순 수식 전개를 넘어, <strong className="text-emerald-400">코드 작성과 실행 피드백</strong>을 통한 풀이 방식을 비교합니다.<br />
+            오류가 발생하면 파이프라인이 <span className="text-rose-400 font-semibold px-1">Fast Fail</span>하고, 에러 Traceback을 기반으로 스스로 반성(Reflection)하여 코드를 재작성하는 <strong>RefineLoop Mechanism</strong> 과정이 포함되어 있습니다.
+          </p>
+          
+          <div className="flex flex-wrap gap-2">
+            {evalData.map((e, i) => (
+              <button key={i} onClick={() => setSelectedEvalIdx(i)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${selectedEvalIdx === i ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-500/10' : 'bg-white/[0.03] text-slate-500 border border-white/5 hover:text-slate-300'
+                  }`}>
+                Program-Aided #{i + 1} ({e.type})
+              </button>
+            ))}
+          </div>
+
+          {selectedEval && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              {/* 왼쪽: 순수 문제 상황 & 도구 */}
+              <div className="glass rounded-2xl border-white/5 flex flex-col group/card transition-all hover:border-white/10">
+                <div className="px-6 py-4 border-b border-white/5 bg-white/[0.02]">
+                  <h3 className="font-bold text-white flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-slate-400 group-hover/card:bg-white transition-colors" />
+                    Problem Definition
+                  </h3>
+                </div>
+                <div className="p-6 space-y-4 flex-1">
+                  <div className="bg-slate-900/40 p-5 rounded-xl border border-white/5 text-sm text-slate-200 leading-relaxed shadow-inner">
+                    <Md>{selectedEval.query}</Md>
+                  </div>
+                  <div className="pt-2">
+                     <div className="text-xs font-bold text-slate-500 mb-3 uppercase tracking-wider">Available Tools</div>
+                     <div className="flex flex-wrap gap-2">
+                        {selectedEval.tools?.map((t, i) => (
+                          <span key={i} className="px-2.5 py-1 rounded-md bg-slate-800 text-slate-300 text-[11px] font-mono border border-white/10 shadow-sm">{t}</span>
+                        ))}
+                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 오른쪽: 코드 실행 & 반성 */}
+              <div className="glass rounded-2xl border-emerald-500/20 flex flex-col overflow-hidden relative group/exec">
+                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover/exec:opacity-10 transition-opacity duration-500 pointer-events-none">
+                  <svg className="w-48 h-48 text-emerald-400 transform translate-x-12 -translate-y-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><path d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </div>
+                <div className="px-6 py-5 border-b border-emerald-500/10 bg-gradient-to-r from-emerald-500/[0.05] to-transparent flex items-center justify-between z-10">
+                  <h3 className="font-bold text-emerald-400 flex items-center gap-2 tracking-tight">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-[pulse_2s_ease-in-out_infinite]" />
+                    Program-Aided Execution & RefineLoop
+                  </h3>
+                </div>
+                
+                <div className="p-6 space-y-8 flex-1 overflow-y-auto max-h-[700px] custom-scrollbar z-10">
+                  {/* Reasoning Steps */}
+                  <div className="space-y-4 relative">
+                    <div className="px-2 text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                      <div className="flex-1 border-t border-slate-700/50"></div>
+                      <span>Reasoning & Reflection</span>
+                      <div className="flex-1 border-t border-slate-700/50"></div>
+                    </div>
+                    
+                    <div className="space-y-4 pl-4 border-l-2 border-emerald-500/20 py-2">
+                      {selectedEval.reasoning_steps.map((step, i) => (
+                        <div key={i} className="relative p-5 rounded-2xl bg-slate-900/80 border border-white/5 space-y-3 shadow-sm hover:border-emerald-500/30 transition-colors">
+                          <div className="absolute top-5 -left-[1.65rem] w-3 h-3 rounded-full bg-slate-900 border-2 border-emerald-500" />
+                          <div className="flex items-center gap-3">
+                            <span className="px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-black uppercase tracking-wider border border-emerald-500/20">{step.step}</span>
+                            {step.params?.iteration && <span className="text-[11px] font-bold text-slate-400 bg-slate-800 px-2 py-1 rounded-md">Iter {step.params.iteration}</span>}
+                          </div>
+                          {step.params?.llm_response && (
+                            <div className="text-sm text-slate-300 prose prose-invert prose-p:leading-relaxed max-w-none prose-pre:bg-[#0d1117] prose-pre:border prose-pre:border-white/5 prose-pre:shadow-inner custom-scrollbar-prose">
+                              <Md>{step.params.llm_response}</Md>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Final Response (Code) */}
+                  <div className="space-y-4 relative">
+                    <div className="px-2 text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                      <div className="flex-1 border-t border-slate-700/50"></div>
+                      <span>Generated Payload</span>
+                      <div className="flex-1 border-t border-slate-700/50"></div>
+                    </div>
+                    <div className="relative group/code">
+                      <div className="absolute inset-0 bg-emerald-500/5 rounded-2xl blur-xl opacity-0 group-hover/code:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                      <div className="relative p-5 rounded-2xl bg-[#0d1117] border border-emerald-500/20 text-[13px] font-mono text-emerald-300 overflow-x-auto whitespace-pre custom-scrollbar leading-relaxed">
+                        {selectedEval.response}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Result & Execution */}
+                  <div className="space-y-4 relative">
+                    <div className="px-2 text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                      <div className="flex-1 border-t border-slate-700/50"></div>
+                      <span>Runtime Feedback</span>
+                      <div className="flex-1 border-t border-slate-700/50"></div>
+                    </div>
+                    
+                    {selectedEval.result?.error ? (
+                      <div className="p-5 rounded-2xl bg-rose-500/[0.03] border border-rose-500/30 text-rose-400 text-sm shadow-inner overflow-hidden">
+                        <div className="font-bold flex items-center gap-2 mb-3">
+                          <div className="p-1 rounded bg-rose-500/20">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>
+                          </div>
+                          <span className="tracking-wide">Execution Failed: {selectedEval.result.error}</span>
+                        </div>
+                        <div className="font-mono text-[11px] opacity-90 whitespace-pre overflow-x-auto bg-[#0d1117] p-4 rounded-xl border border-rose-500/10 custom-scrollbar leading-relaxed">
+                          {selectedEval.result.traceback || "No traceback available."}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-5 rounded-2xl bg-cyan-500/[0.03] border border-cyan-500/30 text-cyan-400 text-sm shadow-inner group/success">
+                        <div className="font-bold flex items-center gap-2 mb-3">
+                          <div className="p-1 rounded bg-cyan-500/20 group-hover/success:bg-cyan-500/30 transition-colors">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                          </div>
+                          <span className="tracking-wide">Execution Succeeded</span>
+                        </div>
+                        <div className="font-mono text-[12px] opacity-90 whitespace-pre overflow-x-auto bg-[#0d1117] p-4 rounded-xl border border-cyan-500/10 custom-scrollbar">
+                          {selectedEval.result?.output || "Executed successfully with no stdout."}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
               </div>
             </div>
           )}

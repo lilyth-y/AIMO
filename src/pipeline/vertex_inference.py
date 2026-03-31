@@ -7,6 +7,7 @@ Falls back to remote URL or local model if Vertex is unavailable.
 import os
 import random
 import time
+import concurrent.futures
 from typing import Any, Optional, Tuple
 
 from .logger import get_logger
@@ -24,6 +25,7 @@ MAX_OUTPUT_TOKENS = int(os.getenv("AIMO_MAX_NEW_TOKENS", "16384"))
 VERTEX_MAX_RETRIES = int(os.getenv("AIMO_VERTEX_MAX_RETRIES", "6"))
 VERTEX_RETRY_BASE_SECONDS = float(os.getenv("AIMO_VERTEX_RETRY_BASE_SECONDS", "1.0"))
 VERTEX_RETRY_MAX_SECONDS = float(os.getenv("AIMO_VERTEX_RETRY_MAX_SECONDS", "30.0"))
+VERTEX_REQUEST_TIMEOUT_SEC = float(os.getenv("AIMO_VERTEX_REQUEST_TIMEOUT_SEC", "60.0"))
 
 
 def is_vertex_configured() -> bool:
@@ -96,21 +98,44 @@ def generate_vertex(prompt: str, model: Optional[str] = None, **kwargs) -> str:
 
     try:
         from google.genai import types
-        config = kwargs.get("config") or types.GenerateContentConfig(max_output_tokens=max_tokens)
+        if kwargs.get("config") is not None:
+            config = kwargs["config"]
+        else:
+            cfg_kw = {"max_output_tokens": max_tokens}
+            if kwargs.get("temperature") is not None:
+                cfg_kw["temperature"] = float(kwargs["temperature"])
+            config = types.GenerateContentConfig(**cfg_kw)
         last_err: Optional[Exception] = None
         for attempt in range(VERTEX_MAX_RETRIES + 1):
             try:
-                response = client.models.generate_content(
-                    model=model,
-                    contents=prompt,
-                    config=config,
-                )
+                # google-genai does not reliably expose a per-request timeout across all transports.
+                # To prevent rare hangs from stalling evaluation runs, enforce a hard timeout here.
+                def _call():
+                    return client.models.generate_content(
+                        model=model,
+                        contents=prompt,
+                        config=config,
+                    )
+
+                timeout_s = float(kwargs.get("request_timeout_sec", VERTEX_REQUEST_TIMEOUT_SEC))
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                    fut = ex.submit(_call)
+                    response = fut.result(timeout=timeout_s)
+                # Cost/debug: log token usage when SDK exposes it (google-genai).
+                _usage = getattr(response, "usage_metadata", None) or getattr(response, "usage", None)
+                if _usage is not None:
+                    logger.info("Vertex usage_metadata: %s", _usage)
                 if hasattr(response, "text"):
                     return response.text or ""
                 if hasattr(response, "candidates") and response.candidates:
                     part = response.candidates[0].content.parts[0]
                     return getattr(part, "text", None) or str(part)
                 return ""
+            except concurrent.futures.TimeoutError as e:
+                last_err = e
+                # Timeout is not retryable in the same way as rate limits; bail fast so pipeline can fallback.
+                logger.warning("Vertex AI request timed out after %.1fs (attempt %s/%s)", timeout_s, attempt + 1, VERTEX_MAX_RETRIES)
+                break
             except Exception as e:
                 last_err = e
                 msg = str(e)

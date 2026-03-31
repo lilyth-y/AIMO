@@ -9,6 +9,8 @@ import os
 from typing import Optional
 from pathlib import Path
 
+from .executor_env import executor_wall_seconds_from_env
+
 
 class Settings:
     """통합 설정 클래스"""
@@ -17,10 +19,11 @@ class Settings:
     @property
     def model_name(self) -> str:
         """사용할 모델 이름 (HuggingFace repo_id 또는 로컬 절대경로).
-        기본값: 1.5B (빠른 평가). Kaggle/긴 세션에서는 OMI_MODEL=MathLLMs/MathCoder-L-13B 로 13B 사용 가능."""
+        기본값: Qwen2.5-Math-7B-Instruct. VRAM 부족·스모크용으로 1.5B를 쓰려면
+        AIMO_MODEL=Qwen/Qwen2.5-Math-1.5B-Instruct."""
         return os.getenv(
             "OMI_MODEL",
-            os.getenv("AIMO_MODEL", "Qwen/Qwen2.5-Math-1.5B-Instruct")
+            os.getenv("AIMO_MODEL", "Qwen/Qwen2.5-Math-7B-Instruct")
         )
     
     @property
@@ -30,8 +33,8 @@ class Settings:
             "OMI_QUANTIZATION",
             os.getenv(
                 "AIMO_QUANTIZATION",
-                "8bit"
-            )
+                "4bit",
+            ),
         )
     
     # 파이프라인 설정
@@ -55,15 +58,28 @@ class Settings:
         """문제 분해 복잡도 임계값"""
         return int(os.getenv("OMI_DECOMPOSITION_COMPLEXITY_THRESHOLD", "15"))
     
+    @property
+    def optimize_accuracy(self) -> bool:
+        """
+        정확도 우선 모드 (Ralph 루프·벤치 평가용).
+        ``1``이면 후보 투표 기본 활성, 후보 수 기본 4(환경으로 덮어쓰기 가능).
+        """
+        return os.getenv("AIMO_OPTIMIZE_ACCURACY", "0").strip() == "1"
+
     # 후보 생성 설정
     @property
     def num_candidates(self) -> int:
-        """전략당 생성할 후보 수"""
-        return int(os.getenv("OMI_NUM_CANDIDATES", "3"))
+        """전략당 생성할 후보 수 (optimize_accuracy 시 기본 4, 아니면 3)."""
+        raw = os.getenv("OMI_NUM_CANDIDATES")
+        if raw is None or str(raw).strip() == "":
+            return 4 if self.optimize_accuracy else 3
+        return max(1, int(raw))
     
     @property
     def use_voting(self) -> bool:
-        """후보 투표 사용 여부"""
+        """후보 투표 사용 여부 (optimize_accuracy 시 기본 true)."""
+        if self.optimize_accuracy:
+            return os.getenv("OMI_USE_VOTING", "true").lower() == "true"
         return os.getenv("OMI_USE_VOTING", "false").lower() == "true"
     
     # 로깅 설정
@@ -93,8 +109,8 @@ class Settings:
     # 실행 설정
     @property
     def executor_timeout_seconds(self) -> float:
-        """코드 실행 타임아웃 (초)"""
-        return float(os.getenv("OMI_EXECUTOR_TIMEOUT", "5.0"))
+        """코드 실행 wall 타임아웃 (초). 기본 무제한(float('inf')); 유한 한도는 env로만 설정."""
+        return executor_wall_seconds_from_env()
     
     @property
     def executor_memory_limit_mb(self) -> int:
@@ -104,7 +120,10 @@ class Settings:
     # 테스트 설정
     @property
     def fast_test(self) -> bool:
-        """빠른 테스트 모드"""
+        """
+        빠른 테스트 모드 (``AIMO_FAST_TEST=1``): Solver가 MockSolver를 쓰고 HF 모델을 로드하지 않음.
+        Mock은 문제를 풀지 않음 — 생성 코드는 ``AIMO_MOCK_GENERATED_CODE`` (기본 ``print(0)``).
+        """
         return os.getenv("AIMO_FAST_TEST", "0") == "1"
     
     @property
@@ -136,6 +155,11 @@ class Settings:
     def use_geometric_handler(self) -> bool:
         """기하 문제 전용 핸들러 사용 (기본 False, IMO 평가 시 비활성 권장)"""
         return os.getenv("AIMO_USE_GEOMETRIC_HANDLER", "0") == "1"
+
+    @property
+    def use_llm_stage1_classifier(self) -> bool:
+        """Stage1에서 LLM 분류 1회 호출 여부 (기본 False)"""
+        return os.getenv("AIMO_USE_LLM_STAGE1_CLASSIFIER", "0") == "1"
 
     def validate(self) -> list[str]:
         """

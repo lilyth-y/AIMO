@@ -84,4 +84,3 @@ if __name__ == "__main__":
     os.environ['PYTHONIOENCODING'] = 'utf-8'
     
     quick_test()
-   quick_test()

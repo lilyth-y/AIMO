@@ -1,79 +1,61 @@
 """
-Mock Solver for testing pipeline without heavy LLM
-Generates simple code based on problem patterns
+테스트·CI용 결정론적 Mock (HF/Vertex 없이 파이프라인 골격만 돌릴 때 사용).
+
+이 모듈은 **문제를 풀지 않습니다.** ``AIMO_MOCK_GENERATED_CODE`` 로 고정한 코드만
+반환합니다. 검증 대상은 다음뿐입니다.
+
+- 코드 실행기(CodeExecutor)가 돌아가는지
+- 답 추출·오케스트레이터 반환 dict 계약이 유지되는지
+- (선택) 라우팅/폴백이 예외 없이 이어지는지
+
+수학적 정답률·난이도별 성능은 **실제 모델/엔드포인트 평가**로만 측정해야 합니다.
 """
 
-import re
+import os
+
+from .logger import get_logger
+
+logger = get_logger()
+
+# 실행 가능한 한 줄(또는 세미콜론으로 이은 짧은 블록) 권장. 기본은 0.
+_DEFAULT_MOCK_CODE = "print(0)"
+_ENV_MOCK_CODE = "AIMO_MOCK_GENERATED_CODE"
+
+
+def get_configured_mock_code() -> str:
+    """환경 변수로 주입된 코드만 반환. 비어 있으면 기본 ``print(0)``."""
+    raw = os.getenv(_ENV_MOCK_CODE, _DEFAULT_MOCK_CODE)
+    if isinstance(raw, str):
+        raw = raw.strip()
+    if not raw:
+        return _DEFAULT_MOCK_CODE
+    return raw
+
 
 class MockLLMClient:
-    """Mock LLM that generates simple code based on problem keywords"""
-    
+    """프롬프트 내용과 무관하게 설정된 코드 문자열만 돌려준다 (하이브리드 등 ``llm.generate`` 호출용)."""
+
     def __init__(self):
-        print("Mock LLM initialized (no model loading required)")
-    
-    def generate(self, prompt: str) -> str:
-        """Generate simple code based on problem patterns"""
-        
-        # Extract problem from prompt
-        problem_match = re.search(r"Problem: (.+?)(?:Code:|$)", prompt, re.DOTALL)
-        problem = problem_match.group(1).strip() if problem_match else ""
-        
-        # Pattern matching for common problems
-        if "+" in problem and any(c.isdigit() for c in problem):
-            # Simple addition
-            numbers = re.findall(r'\d+', problem)
-            if len(numbers) >= 2:
-                return f"print({numbers[0]} + {numbers[1]})"
-        
-        if "sum" in problem.lower() or "total" in problem.lower():
-            # Sum problems
-            numbers = re.findall(r'\d+', problem)
-            if numbers:
-                return f"print(sum([{', '.join(numbers)}]))"
-        
-        if "product" in problem.lower() or "*" in problem or "×" in problem:
-            # Multiplication
-            numbers = re.findall(r'\d+', problem)
-            if len(numbers) >= 2:
-                return f"print({numbers[0]} * {numbers[1]})"
-        
-        if "square" in problem.lower():
-            # Square
-            numbers = re.findall(r'\d+', problem)
-            if numbers:
-                return f"print({numbers[0]} ** 2)"
-        
-        if "range" in problem.lower() or "interval" in problem.lower():
-            # Range/interval problems
-            return "print('[0, 1/2]')"
-        
-        if any(word in problem.lower() for word in ["solve", "equation", "find", "calculate"]):
-            # Generic math problem - try sympy
-            return """from sympy import symbols, solve, simplify
-x, a = symbols('x a')
-result = solve(x**2 - 2*x + 1, x)
-print(result[0] if result else 'No solution')"""
-        
-        # Default fallback
-        return "print('42')"
+        logger.debug("MockLLMClient initialized (deterministic, no model)")
+
+    def generate(self, prompt: str, **kwargs) -> str:
+        del prompt, kwargs
+        return get_configured_mock_code()
+
 
 class MockSolver:
-    """Mock solver using pattern-based code generation"""
-    
+    """Solver 대체용: ``generate_code`` 가 항상 ``get_configured_mock_code()`` 결과를 쓴다."""
+
     def __init__(self):
         self.llm = MockLLMClient()
-    
+        self.last_reasoning = None
+        self.last_syntax_error = False
+
     def generate_code(self, problem_text: str, strategy: str) -> str:
-        """Generate code based on problem pattern"""
-        
-        # Simple prompt
-        prompt = f"Solve this problem:\nProblem: {problem_text}\nCode:"
-        
-        # Get mock response
-        code = self.llm.generate(prompt)
-        
-        # Basic validation
-        if not code.strip():
-            code = "print('No solution')"
-        
+        del problem_text
+        code = get_configured_mock_code()
+        self.last_reasoning = (
+            f"<PLAN>deterministic_mock env={_ENV_MOCK_CODE!r} strategy={strategy!r}</PLAN>\n"
+            f"<ANS>{code}</ANS>"
+        )
         return code

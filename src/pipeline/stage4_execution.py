@@ -10,13 +10,16 @@
 """
 
 from io import StringIO
+import math
 import multiprocessing as mp
 import contextlib
 import builtins
 import time
 import os
 import signal
+import re
 from typing import Optional, Dict, Any, Tuple
+from .executor_env import executor_wall_seconds_from_env
 from .logger import get_logger
 
 logger = get_logger()
@@ -29,7 +32,11 @@ except ImportError:
 
 # 0 = 제한 없음 (성능 제한 완화)
 DEFAULT_MEMORY_LIMIT_MB = int(os.getenv("AIMO_EXECUTOR_MEMORY_MB", "0"))
-DEFAULT_CPU_TIME_LIMIT_SEC = float(os.getenv("AIMO_EXECUTOR_CPU_TIME_SEC", "10.0"))
+_cpu_raw = os.getenv("AIMO_EXECUTOR_CPU_TIME_SEC")
+if _cpu_raw is None or str(_cpu_raw).strip() == "" or str(_cpu_raw).strip() == "0":
+    DEFAULT_CPU_TIME_LIMIT_SEC = float("inf")
+else:
+    DEFAULT_CPU_TIME_LIMIT_SEC = float(_cpu_raw)
 DEFAULT_CPU_PERCENT_LIMIT = float(os.getenv("AIMO_EXECUTOR_CPU_PERCENT", "100.0"))
 
 FORBIDDEN_BUILTINS = {"open", "exec", "eval", "compile", "__import__"}  # keep safe_import wrapper
@@ -73,8 +80,21 @@ def _restricted_globals() -> Dict[str, Any]:
     try:
         import sympy
         g["sympy"] = sympy
+        # Common SymPy names that models frequently call without importing.
+        for _name in ("sin", "cos", "tan", "sqrt", "pi", "E", "Symbol", "symbols", "Eq", "solve", "Matrix"):
+            if hasattr(sympy, _name):
+                g[_name] = getattr(sympy, _name)
+        # Many generated solutions call dot(a,b) without defining/importing it.
+        if "dot" not in g:
+            def dot(a, b):
+                return a.dot(b) if hasattr(a, "dot") else (a * b)
+            g["dot"] = dot
     except ImportError:
         pass
+    # Common math names when SymPy isn't used/imported in code.
+    for _name in ("sin", "cos", "tan", "sqrt", "pi"):
+        if _name not in g and hasattr(math, _name):
+            g[_name] = getattr(math, _name)
     return g
 
 def _run_code(code: str, q: mp.Queue):
@@ -95,23 +115,29 @@ class CodeExecutor:
     """
     
     def __init__(
-        self, 
-        timeout_seconds: float = 5.0,
+        self,
+        timeout_seconds: Optional[float] = None,
         memory_limit_mb: Optional[int] = None,
         cpu_time_limit_sec: Optional[float] = None,
         cpu_percent_limit: Optional[float] = None
     ):
         """
         Args:
-            timeout_seconds: Wall time 타임아웃 (초)
+            timeout_seconds: Wall time 타임아웃 (초). None이면 env 기본(executor_wall_seconds_from_env).
             memory_limit_mb: 메모리 제한 (MB)
             cpu_time_limit_sec: CPU 시간 제한 (초)
             cpu_percent_limit: CPU 사용률 제한 (%)
         """
-        self.timeout_seconds = timeout_seconds
+        self.timeout_seconds = (
+            timeout_seconds if timeout_seconds is not None else executor_wall_seconds_from_env()
+        )
         self.memory_limit_mb = memory_limit_mb if memory_limit_mb is not None else DEFAULT_MEMORY_LIMIT_MB
         self.cpu_time_limit_sec = cpu_time_limit_sec if cpu_time_limit_sec is not None else DEFAULT_CPU_TIME_LIMIT_SEC
         self.cpu_percent_limit = cpu_percent_limit if cpu_percent_limit is not None else DEFAULT_CPU_PERCENT_LIMIT
+
+    def _wall_join_timeout(self) -> Optional[float]:
+        """``multiprocessing.Process.join`` timeout: ``None`` = wait indefinitely."""
+        return None if math.isinf(self.timeout_seconds) else self.timeout_seconds
 
     def _basic_static_check(self, code: str) -> Optional[str]:
         """
@@ -152,6 +178,7 @@ class CodeExecutor:
         Returns:
             실행 결과 문자열 또는 에러 메시지
         """
+        code = self._normalize_code_for_execution(code)
         static_err = self._basic_static_check(code)
         if static_err:
             logger.warning(f"Static check failed: {static_err}")
@@ -214,7 +241,7 @@ class CodeExecutor:
                 logger.debug(f"Resource monitoring error: {e}")
         
         # 기본 타임아웃 체크 (psutil이 없는 경우)
-        proc.join(self.timeout_seconds)
+        proc.join(self._wall_join_timeout())
         
         if proc.is_alive():
             logger.warning("Process still alive after timeout, terminating...")
@@ -237,6 +264,72 @@ class CodeExecutor:
             result = "Error: Unknown execution failure"
         
         return result
+
+    @staticmethod
+    def _normalize_code_for_execution(code: str) -> str:
+        """
+        Best-effort normalization to reduce common import-time failures that are
+        easy to fix mechanically (helps self-correction converge).
+
+        Important: keep transformations minimal; do not change intent broadly.
+        """
+        if not isinstance(code, str) or not code.strip():
+            return code
+
+        lines = code.splitlines()
+        changed = False
+
+        def _rewrite_sympy_from_import(names: str, symbol: str) -> Optional[str]:
+            # Remove `symbol` from a comma-separated import list. Return new line or None to delete.
+            parts = [p.strip() for p in names.split(",") if p.strip()]
+            parts2 = [p for p in parts if p.split(" as ")[0].strip() != symbol]
+            if not parts2:
+                return None
+            return "from sympy import " + ", ".join(parts2)
+
+        new_lines: list[str] = []
+        for ln in lines:
+            m = re.match(r"^\s*from\s+sympy\s+import\s+(.*)\s*$", ln)
+            if m:
+                names = m.group(1)
+                if re.search(r"\bdot\b", names):
+                    repl = _rewrite_sympy_from_import(names, "dot")
+                    if repl is None:
+                        # Replace with plain sympy import to keep namespace available.
+                        new_lines.append("import sympy as sympy")
+                    else:
+                        new_lines.append(repl)
+                    changed = True
+                    continue
+                if re.search(r"\bminimize\b", names):
+                    repl = _rewrite_sympy_from_import(names, "minimize")
+                    if repl is None:
+                        new_lines.append("import sympy as sympy")
+                    else:
+                        new_lines.append(repl)
+                    changed = True
+                    continue
+            new_lines.append(ln)
+
+        if changed:
+            # Provide small shims if code referenced these names.
+            prelude: list[str] = []
+            joined = "\n".join(new_lines)
+            if re.search(r"(?m)^\s*dot\s*\(", joined) or " dot(" in joined:
+                prelude.append(
+                    "def dot(a, b):\n"
+                    "    # sympy.dot is not a public API; many objects implement .dot()\n"
+                    "    return a.dot(b) if hasattr(a, 'dot') else (a * b)\n"
+                )
+            if re.search(r"(?m)^\s*minimize\s*\(", joined) or " minimize(" in joined:
+                prelude.append(
+                    "def minimize(*args, **kwargs):\n"
+                    "    raise RuntimeError('minimize is not available in sympy; use a different approach')\n"
+                )
+            if prelude:
+                new_lines = prelude + new_lines
+
+        return "\n".join(new_lines)
     
     def _terminate_process(self, proc: mp.Process, p: Optional[Any] = None) -> None:
         """
@@ -287,6 +380,7 @@ class CodeExecutor:
         Returns:
             (실행 결과, 리소스 통계 딕셔너리)
         """
+        code = self._normalize_code_for_execution(code)
         static_err = self._basic_static_check(code)
         if static_err:
             logger.warning(f"Static check failed: {static_err}")

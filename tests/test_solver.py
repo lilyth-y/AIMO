@@ -3,9 +3,12 @@ Quick test of the solver with a simple problem
 """
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from src.pipeline.orchestrator import PipelineOrchestrator
+# Repo root + src (same pattern as examples/); allows `python tests/test_solver.py` from root.
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(_ROOT, "src"))
+
+from pipeline.orchestrator import PipelineOrchestrator
 
 def main():
     print("="*70)

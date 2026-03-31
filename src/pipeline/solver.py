@@ -37,12 +37,61 @@ from .logger import get_logger
 
 logger = get_logger()
 
+_VERTEX_SKIP_LOGGED = False
+
+
+def _log_vertex_skipped_once() -> None:
+    """Log once when Vertex is not configured so local HF is used (helps Cloud Shell debugging)."""
+    global _VERTEX_SKIP_LOGGED
+    if _VERTEX_SKIP_LOGGED:
+        return
+    _VERTEX_SKIP_LOGGED = True
+    has_proj = bool((os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("GCP_PROJECT") or "").strip())
+    has_key = bool((os.getenv("GOOGLE_GENAI_API_KEY") or os.getenv("VERTEX_AI_API_KEY") or "").strip())
+    logger.info(
+        "Vertex Gemini not configured in this process (project=%s, api_key=%s); "
+        "using remote or local HF. Export GOOGLE_CLOUD_PROJECT or API key before python.",
+        "set" if has_proj else "unset",
+        "set" if has_key else "unset",
+    )
+
+
 # Global LLM instance (shared across all Solver instances)
 _GLOBAL_LLM_MODEL = None
 _GLOBAL_LLM_TOKENIZER = None
 _GLOBAL_LLM_PIPE = None
 
-FAST_TEST = os.getenv("AIMO_FAST_TEST") == "1"
+def _aimo_fast_test_enabled() -> bool:
+    """
+    True when ``AIMO_FAST_TEST=1``: use MockSolver, skip local HF model.
+    Emit code from ``AIMO_MOCK_GENERATED_CODE`` (see ``mock_solver``); does not solve tasks.
+    """
+    return os.getenv("AIMO_FAST_TEST", "0") == "1"
+
+
+def reset_global_llm_cache() -> None:
+    """
+    로드된 HF 모델·토크나이저·text-generation 파이프라인 전역 캐시를 비운다.
+    테스트 격리 또는 모델/환경 전환 시 사용.
+    """
+    global _GLOBAL_LLM_MODEL, _GLOBAL_LLM_TOKENIZER, _GLOBAL_LLM_PIPE
+    _GLOBAL_LLM_MODEL = None
+    _GLOBAL_LLM_TOKENIZER = None
+    _GLOBAL_LLM_PIPE = None
+
+
+def _dtype_for_local_weights(quantization_config) -> "torch.dtype":
+    """양자화 없을 때 ``AIMO_LLM_DTYPE`` (float16|float32|bfloat16). 양자화 시 fp16 고정."""
+    if torch is None:
+        raise RuntimeError("torch required for local LLM")
+    if quantization_config is not None:
+        return torch.float16
+    d = os.getenv("AIMO_LLM_DTYPE", "float16").strip().lower()
+    if d in ("float32", "fp32"):
+        return torch.float32
+    if d in ("bfloat16", "bf16"):
+        return torch.bfloat16
+    return torch.float16
 
 
 class LocalLLMClient:
@@ -51,25 +100,38 @@ class LocalLLMClient:
     def __init__(self, model_name=None, quantization=None):
         global _GLOBAL_LLM_MODEL, _GLOBAL_LLM_TOKENIZER, _GLOBAL_LLM_PIPE
         # Allow environment override so container runs can choose model via OMI_MODEL/AIMO_QUANT
-        env_model = os.getenv("OMI_MODEL")
-        env_quant = os.getenv("MATHCODEORCHESTRATOR_QUANTIZATION")
+        env_model = os.getenv("OMI_MODEL") or os.getenv("AIMO_MODEL")
+        env_quant = (
+            os.getenv("MATHCODEORCHESTRATOR_QUANTIZATION")
+            or os.getenv("OMI_QUANTIZATION")
+            or os.getenv("AIMO_QUANTIZATION")
+        )
         if model_name is None:
             model_name = env_model if env_model else config.HF_MODEL_NAME
         if quantization is None:
+            # Legacy MATHCODEORCHESTRATOR_QUANTIZATION wins; else OMI_/AIMO_/default via config
             quantization = env_quant if env_quant else config.QUANTIZATION_DEFAULT
 
         # Use quantized model for memory efficiency
         self.quantization = quantization
         self.model_name = model_name
 
-        # Initialize tokenizer
-        self.tokenizer = self._get_tokenizer(model_name)
-        if getattr(self.tokenizer, "pad_token_id", None) is None:
-            self.tokenizer.pad_token_id = getattr(self.tokenizer, "eos_token_id", 0)
+        # Tokenizer/model are expensive; only load if we actually fall back to local generation.
+        self.tokenizer = None
 
         # Initialize model (lazy loading)
         self.model = None
         self.pipeline = None
+
+    def _ensure_tokenizer(self):
+        """Lazy-load tokenizer only when local pipeline is used."""
+        global _GLOBAL_LLM_TOKENIZER
+        if _GLOBAL_LLM_TOKENIZER is None:
+            _GLOBAL_LLM_TOKENIZER = self._get_tokenizer(self.model_name)
+            if getattr(_GLOBAL_LLM_TOKENIZER, "pad_token_id", None) is None:
+                _GLOBAL_LLM_TOKENIZER.pad_token_id = getattr(_GLOBAL_LLM_TOKENIZER, "eos_token_id", 0)
+        self.tokenizer = _GLOBAL_LLM_TOKENIZER
+        return self.tokenizer
 
     @staticmethod
     def _is_local_model_path(model_name: str) -> bool:
@@ -120,6 +182,7 @@ class LocalLLMClient:
         global _GLOBAL_LLM_MODEL
         if _GLOBAL_LLM_MODEL is None:
             quantization_config = self._get_quantization_config()
+            weight_dtype = _dtype_for_local_weights(quantization_config)
             logger.info(
                 f"Loading model: {self.model_name} with {self.quantization} quantization..."
             )
@@ -129,7 +192,7 @@ class LocalLLMClient:
                 device_map="auto",
                 trust_remote_code=True,
                 quantization_config=quantization_config,
-                dtype=torch.float16,  # Always use fp16 to fit in 8GB VRAM (was torch_dtype, deprecated)
+                dtype=weight_dtype,
             )
             if is_local:
                 kw["local_files_only"] = True
@@ -175,6 +238,20 @@ class LocalLLMClient:
 
     def _get_quantization_config(self):
         """Get quantization config for memory efficiency."""
+        if self.quantization not in ("4bit", "8bit"):
+            return None  # Full precision
+        if BitsAndBytesConfig is None:
+            logger.warning("transformers BitsAndBytesConfig unavailable; using full precision")
+            return None
+        try:
+            import bitsandbytes  # noqa: F401
+        except ImportError:
+            logger.warning(
+                "bitsandbytes not installed; using full precision instead of %s. "
+                "Install: pip install -U bitsandbytes>=0.46.1, or set OMI_QUANTIZATION=none.",
+                self.quantization,
+            )
+            return None
         if self.quantization == "4bit":
             return BitsAndBytesConfig(
                 load_in_4bit=True,
@@ -182,23 +259,22 @@ class LocalLLMClient:
                 bnb_4bit_compute_dtype=torch.float16,
                 bnb_4bit_use_double_quant=False,
             )
-        elif self.quantization == "8bit":
-            # GPU 메모리 부족 시 CPU로 일부 오프로드 허용 (32-bit 유지)
-            enable_cpu_offload = os.getenv("AIMO_LLM_INT8_CPU_OFFLOAD", "1") == "1"
-            return BitsAndBytesConfig(
-                load_in_8bit=True,
-                bnb_8bit_compute_dtype=torch.float16,
-                llm_int8_enable_fp32_cpu_offload=enable_cpu_offload,
-            )
-        else:
-            return None  # Full precision
+        # 8bit: GPU 메모리 부족 시 CPU로 일부 오프로드 허용 (32-bit 유지)
+        enable_cpu_offload = os.getenv("AIMO_LLM_INT8_CPU_OFFLOAD", "1") == "1"
+        return BitsAndBytesConfig(
+            load_in_8bit=True,
+            bnb_8bit_compute_dtype=torch.float16,
+            llm_int8_enable_fp32_cpu_offload=enable_cpu_offload,
+        )
 
     def _get_pipeline(self):
         """Get or create the text generation pipeline."""
         global _GLOBAL_LLM_PIPE
         if _GLOBAL_LLM_PIPE is None:
+            self._ensure_tokenizer()
             model = self._get_model()
             logger.info("Setting up text generation pipeline...")
+            pipe_dtype = _dtype_for_local_weights(self._get_quantization_config())
 
             # 생성 옵션은 generate() 호출 시에만 전달 (pipeline 생성 시 넣으면 호출 시와 중복되어 경고 발생)
             _GLOBAL_LLM_PIPE = pipeline(
@@ -206,7 +282,7 @@ class LocalLLMClient:
                 model=model,
                 tokenizer=self.tokenizer,
                 device_map="auto",
-                dtype=torch.float16,
+                dtype=pipe_dtype,
             )
             logger.info("Pipeline ready")
         return _GLOBAL_LLM_PIPE
@@ -216,6 +292,36 @@ class LocalLLMClient:
         Generate code using local HuggingFace model or remote inference API.
         If OMI_REMOTE_INFERENCE_URL is set, calls that URL (computing engine = remote).
         """
+        # 0) Vertex Endpoint (fine-tuned Qwen) if configured
+        try:
+            from .vertex_endpoint_inference import (
+                is_vertex_endpoint_configured,
+                predict_vertex_endpoint,
+            )
+            if is_vertex_endpoint_configured():
+                if "MathCoder" in (self.model_name or ""):
+                    formatted = f"### Problem:\n{prompt}\n\n### Solution:\n"
+                else:
+                    formatted = prompt
+                return predict_vertex_endpoint(formatted, temperature=temperature)
+        except Exception as e:
+            logger.warning("Vertex endpoint inference check failed: %s", e)
+
+        try:
+            from .vertex_inference import (
+                is_vertex_configured,
+                generate_vertex,
+            )
+            if is_vertex_configured():
+                if "MathCoder" in (self.model_name or ""):
+                    formatted = f"### Problem:\n{prompt}\n\n### Solution:\n"
+                else:
+                    formatted = prompt
+                return generate_vertex(formatted, temperature=temperature)
+            _log_vertex_skipped_once()
+        except Exception as e:
+            logger.warning("Vertex inference check failed: %s", e)
+
         try:
             from .remote_inference import (
                 is_remote_inference_configured,
@@ -242,6 +348,7 @@ class LocalLLMClient:
 
             # tokenizer.chat_template이 없으면 messages 대신 문자열로 호출 (MathCoder 등)
             # Instruct 모델인데 템플릿이 없으면 기본적인 Qwen 템플릿 부여 시도
+            self._ensure_tokenizer()
             if "Instruct" in (self.model_name or "") and getattr(self.tokenizer, "chat_template", None) is None:
                 try:
                     self.tokenizer.chat_template = (
@@ -268,24 +375,37 @@ class LocalLLMClient:
                 max_length=None,  # pipeline 기본 20과 충돌 방지
             )
             gen_config = GenerationConfig(**gen_cfg_kw)
-            # pipeline/백엔드에서 temperature 미지원 시 경고 제거: to_dict()에서 제거 후 dict로 전달
-            # (GenerationConfig 기본값에 temperature가 있으면 그대로 전달되어 경고 발생)
-            gen_dict = gen_config.to_dict()
-            gen_dict.pop("temperature", None)
-            gen_dict = {k: v for k, v in gen_dict.items() if v is not None}
+            # pipeline은 GenerationConfig 객체를 받아야 함 (dict 전달 시 model_kwargs/bos_token_id 오류)
+            # temperature 제거 후 다시 객체로 만들어 전달 (경고 방지)
+            _gen_dict = gen_config.to_dict()
+            _gen_dict.pop("temperature", None)
+            _gen_dict = {k: v for k, v in _gen_dict.items() if v is not None}
+            gen_config = GenerationConfig(**_gen_dict)
 
             try:
-                if use_messages:
-                    outputs = pipe(
-                        [{"role": "user", "content": formatted_prompt}],
-                        generation_config=gen_dict,
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        message=".*(?:not valid|ignored).*temperature.*",
+                        category=UserWarning,
                     )
-                else:
-                    outputs = pipe(formatted_prompt, generation_config=gen_dict)
+                    if use_messages:
+                        outputs = pipe(
+                            [{"role": "user", "content": formatted_prompt}],
+                            generation_config=gen_config,
+                        )
+                    else:
+                        outputs = pipe(formatted_prompt, generation_config=gen_config)
             except Exception as e:
                 if "chat_template" in str(e) or "chat template" in str(e).lower():
                     use_messages = False
-                    outputs = pipe(formatted_prompt, generation_config=gen_dict)
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            "ignore",
+                            message=".*(?:not valid|ignored).*temperature.*",
+                            category=UserWarning,
+                        )
+                        outputs = pipe(formatted_prompt, generation_config=gen_config)
                 else:
                     raise
 
@@ -334,7 +454,14 @@ class LocalLLMClient:
 
 class Solver:
     def __init__(self):
-        self.llm = LocalLLMClient()
+        self._mock_solver = None
+        if _aimo_fast_test_enabled():
+            from .mock_solver import MockSolver
+
+            self._mock_solver = MockSolver()
+            self.llm = self._mock_solver.llm
+        else:
+            self.llm = LocalLLMClient()
         self.last_reasoning: Optional[str] = (
             None  # stores structured reasoning when used
         )
@@ -344,6 +471,11 @@ class Solver:
         """Constructs prompt(s) and gets code from the LLM.
         If structured reasoning enabled, first obtain reasoning trace then code.
         """
+        if self._mock_solver is not None:
+            complexity_score = assess_complexity(problem_text)
+            self.last_complexity_score = complexity_score
+            return self._mock_solver.generate_code(problem_text, strategy)
+
         complexity_score = assess_complexity(problem_text)
         use_structured = config.USE_STRUCTURED and (
             complexity_score >= config.COMPLEXITY_STRUCTURED_MIN_SCORE
@@ -390,6 +522,12 @@ class Solver:
 
         _temps: 현재 미사용 (호환성 유지용, orchestrator에서 CANDIDATE_TEMPS 전달).
         """
+        if self._mock_solver is not None:
+            complexity_score = assess_complexity(problem_text)
+            self.last_complexity_score = complexity_score
+            one = self._mock_solver.generate_code(problem_text, strategy)
+            return [one for _ in range(max(1, num_candidates))]
+
         complexity_score = assess_complexity(problem_text)
         use_structured = (
             config.USE_STRUCTURED

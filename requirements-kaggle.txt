@@ -1,0 +1,21 @@
+# Kaggle: GPU 환경용. Kaggle에는 보통 torch(CUDA)가 이미 있으므로 torch는 제외.
+# 로컬 CPU용은 requirements.txt 사용.
+kaggle
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-grpc
+pandas
+polars
+sympy
+scipy
+numpy
+protobuf
+grpcio
+pyarrow
+datasets
+transformers
+accelerate
+safetensors
+sentencepiece
+psutil
+tqdm

@@ -1,0 +1,6 @@
+# Vertex 보조 스크립트용 의존성 (옵션)
+# pip install -r requirements-vertex-tools.txt
+datasets==2.20.0
+huggingface-hub==0.24.6
+tqdm==4.66.5
+google-cloud-logging==3.11.2

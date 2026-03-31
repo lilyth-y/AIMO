@@ -98,13 +98,17 @@ from .hybrid_reasoning_engine import HybridReasoningEngine
 
 from .multi_agent_reasoner import MultiAgentReasoner
 from .refine_loop import create_refine_loop
+from .stage1_labeling import ProblemAnalyzer
 
+from .executor_env import executor_wall_seconds_from_env
 from .orchestrator_helpers import (
     classify_problem,
     inject_reverse_check,
     attempt_code_fix,
     build_fix_code_prompt,
+    is_execution_error_output,
     map_reconciliation_status_to_refine_error,
+    solve_result_verification_fields,
 )
 from .logger import get_logger
 
@@ -189,7 +193,8 @@ class PipelineOrchestrator:
 
 
 
-            self.executor = CodeExecutor(timeout_seconds=5)
+            # Wall / CPU defaults: unlimited unless env sets finite caps (see executor_env, stage4_execution).
+            self.executor = CodeExecutor(timeout_seconds=executor_wall_seconds_from_env())
 
 
 
@@ -224,6 +229,7 @@ class PipelineOrchestrator:
             self.refine_loop = create_refine_loop(max_iterations=1, enable_loop=True)  # Single retry per strategy
 
             self.multi_agent = None  # Lazy initialize
+            self.problem_analyzer = ProblemAnalyzer()
 
 
 
@@ -273,7 +279,7 @@ class PipelineOrchestrator:
 
 
 
-                time_budget: Max time (seconds) allowed for this problem.
+                time_budget: Reserved for API/telemetry (seconds); does not cap code execution wall time.
 
 
 
@@ -284,6 +290,7 @@ class PipelineOrchestrator:
 
 
             ids = make_ids(problem_text)
+            request_id = ids.get("run_id", "unknown")
 
 
 
@@ -340,6 +347,22 @@ class PipelineOrchestrator:
 
             complexity_score = assess_complexity(problem_text)
 
+            if getattr(config, "USE_LLM_STAGE1_CLASSIFIER", False):
+                llm_stage1 = self.problem_analyzer.classify_with_llm(problem_text)
+                llm_problem_type = llm_stage1.get("problem_type")
+                llm_complexity = llm_stage1.get("complexity_score")
+                if llm_problem_type in {"computational", "geometric", "proof", "complex"}:
+                    problem_type = llm_problem_type
+                if isinstance(llm_complexity, int):
+                    complexity_score = llm_complexity
+                logger.info(
+                    "stage_event request_id=%s stage=stage1_classification strategy=stage1_llm "
+                    "verified=false latency_ms=0 error_type=none problem_type=%s complexity_score=%s",
+                    request_id,
+                    problem_type,
+                    complexity_score,
+                )
+
 
 
 
@@ -388,6 +411,7 @@ class PipelineOrchestrator:
                         "method": "geometric_handler",
                         "code": None,
                         "execution_result": result,
+                        **solve_result_verification_fields(variables, True),
                     }
                 logger.debug("[Geometric handler failed, falling back to general pipeline]")
 
@@ -461,7 +485,8 @@ class PipelineOrchestrator:
 
 
 
-                                'execution_result': result
+                                'execution_result': result,
+                                **solve_result_verification_fields(variables, True),
 
 
 
@@ -506,7 +531,8 @@ class PipelineOrchestrator:
 
 
 
-                                'execution_result': hierarchical_result
+                                'execution_result': hierarchical_result,
+                                **solve_result_verification_fields(variables, True),
 
 
 
@@ -551,7 +577,8 @@ class PipelineOrchestrator:
 
 
 
-                            'execution_result': hierarchical_result
+                            'execution_result': hierarchical_result,
+                            **solve_result_verification_fields(variables, True),
 
 
 
@@ -601,32 +628,9 @@ class PipelineOrchestrator:
 
 
 
-            # Update executor timeout based on budget (simple distribution)
-
-
-
-
-            # Reserve more time per strategy, limit to 3 attempts max
-
-
-
-
+            # Reserve more time per strategy, limit to 3 attempts max (strategy list only; no executor runtime cap).
             max_attempts = min(3, len(strategies))
-
-
-
-
             strategies = strategies[:max_attempts]
-
-
-
-
-            per_strategy_timeout = time_budget / max_attempts
-
-
-
-
-            self.executor.timeout_seconds = per_strategy_timeout
 
 
 
@@ -656,7 +660,7 @@ class PipelineOrchestrator:
                             "complexity_score": complexity_score,
                             "extracted_answer": final_answer,
                             "execution_result": "multi_agent_result",
-                            "verified": True,
+                            **solve_result_verification_fields(variables, True),
                             "attempt": 1,
                             "mismatch": False,
                             "mismatch_type": None,
@@ -673,7 +677,7 @@ class PipelineOrchestrator:
                             "execution_result": "multi_agent_result",
                             "structured_used": True,
                             "extracted_answer": final_answer,
-                            "verified": True,
+                            **solve_result_verification_fields(variables, True),
                             "mismatch": False,
                             "mismatch_type": None,
                             "resource_usage": None,
@@ -715,6 +719,11 @@ class PipelineOrchestrator:
 
 
                 logger.info(f"Attempt {attempt}: Trying Strategy: {strategy}")
+                logger.info(
+                    "stage_event request_id=%s stage=strategy_attempt strategy=%s verified=false latency_ms=0 error_type=none",
+                    request_id,
+                    strategy,
+                )
 
 
 
@@ -781,7 +790,11 @@ class PipelineOrchestrator:
 
                         cand_result = str(cand_result)
                         cleaned = extract_final_answer_from_output(cand_result)
-                        verified_cand = False if cleaned.startswith('ERROR:') else self.verifier.verify(cleaned, variables)
+                        verified_cand = (
+                            False
+                            if is_execution_error_output(cleaned)
+                            else self.verifier.verify(cleaned, variables)
+                        )
 
                         if cleaned not in vote_tally:
                             vote_tally[cleaned] = {'count': 0, 'code': cand, 'stats': cand_stats, 'verified': verified_cand}
@@ -1004,7 +1017,7 @@ class PipelineOrchestrator:
 
 
 
-                if cleaned_result.startswith('ERROR:'):
+                if is_execution_error_output(cleaned_result):
 
 
 
@@ -1121,7 +1134,7 @@ class PipelineOrchestrator:
 
 
 
-                if cleaned_result.startswith('ERROR:'):
+                if is_execution_error_output(cleaned_result):
 
 
 
@@ -1142,6 +1155,11 @@ class PipelineOrchestrator:
 
 
                     logger.info(f"Success! Verified Result: {cleaned_result}")
+                    logger.info(
+                        "stage_event request_id=%s stage=verification strategy=%s verified=true latency_ms=0 error_type=none",
+                        request_id,
+                        strategy,
+                    )
 
 
 
@@ -1221,7 +1239,7 @@ class PipelineOrchestrator:
 
 
 
-                        'verified': True,
+                        **solve_result_verification_fields(variables, True),
 
 
 
@@ -1302,7 +1320,7 @@ class PipelineOrchestrator:
 
 
                     # 실행 결과가 유효하면 우선 사용(긴 추론에서 잘못된 "마지막 숫자" 방지)
-                    execution_ok = cleaned_result and not cleaned_result.startswith("ERROR:")
+                    execution_ok = cleaned_result and not is_execution_error_output(cleaned_result)
                     final_answer = (cleaned_result if execution_ok else extracted) or cleaned_result or extracted
 
                     return {
@@ -1340,7 +1358,7 @@ class PipelineOrchestrator:
 
 
 
-                        'verified': True,
+                        **solve_result_verification_fields(variables, True),
 
 
 
@@ -1416,6 +1434,12 @@ class PipelineOrchestrator:
 
 
                     logger.warning("Verification Failed. Triggering Fallback Strategy...")
+                    logger.info(
+                        "stage_event request_id=%s stage=verification strategy=%s verified=false latency_ms=0 error_type=%s",
+                        request_id,
+                        strategy,
+                        mismatch_type or "verification_fail",
+                    )
 
                     # Self-Refine Loop: Use RefineLoop module for cleaner code
 
@@ -1602,7 +1626,7 @@ class PipelineOrchestrator:
 
 
 
-                            'verified': refine_verified,
+                            **solve_result_verification_fields(variables, refine_verified),
 
 
 
@@ -1692,7 +1716,7 @@ class PipelineOrchestrator:
 
 
 
-                                'verified': True,
+                                **solve_result_verification_fields(variables, True),
 
 
 
@@ -1767,7 +1791,7 @@ class PipelineOrchestrator:
 
 
 
-                        'verified': False,
+                        **solve_result_verification_fields(variables, False),
 
 
 
@@ -1922,7 +1946,7 @@ class PipelineOrchestrator:
 
 
 
-                    'verified': True,
+                    **solve_result_verification_fields(variables, True),
 
 
 
@@ -1998,7 +2022,7 @@ class PipelineOrchestrator:
 
                     'extracted_answer': final_answer,
 
-                    'verified': True,
+                    **solve_result_verification_fields(variables, True),
 
 
 
@@ -2078,7 +2102,7 @@ class PipelineOrchestrator:
 
 
 
-                'verified': False,
+                **solve_result_verification_fields(variables, False),
 
 
 
@@ -2163,7 +2187,7 @@ class PipelineOrchestrator:
 
 
 
-                'verified': False,
+                **solve_result_verification_fields(variables, False),
 
 
 

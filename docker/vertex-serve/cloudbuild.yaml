@@ -1,0 +1,14 @@
+# gcloud builds submit --project=aircraft-luggage-scanner --region=asia-northeast3 --config=docker/vertex-serve/cloudbuild.yaml .
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-f"
+      - "docker/vertex-serve/Dockerfile"
+      - "-t"
+      - "${_IMAGE}"
+      - "."
+images:
+  - "${_IMAGE}"
+substitutions:
+  _IMAGE: "asia-northeast3-docker.pkg.dev/aircraft-luggage-scanner/aimo/vertex-serve:latest"

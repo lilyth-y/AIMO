@@ -14,7 +14,7 @@ logger = get_logger()
 
 # Expected request: POST JSON {"prompt": str, "max_new_tokens": int (optional)}
 # Expected response: JSON {"text": str} or {"generated_text": str} or plain text
-DEFAULT_MAX_NEW_TOKENS = 10000000000000000000000000000000
+DEFAULT_MAX_NEW_TOKENS = 16384
 REQUEST_TIMEOUT = 120
 
 

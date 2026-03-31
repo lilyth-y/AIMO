@@ -1,0 +1,7 @@
+# Cloud Shell: Vertex Endpoint 품질 평가만 (torch/transformers 없음)
+# 디스크: pip install --target /tmp/aimo-pypi -r requirements-cloudshell-endpoint-eval.txt
+# 실행: export PYTHONPATH="/tmp/aimo-pypi:${PYTHONPATH}:${PWD}/src"
+#
+# 포함: Vertex SDK + eval 스크립트 진행 표시(tqdm)
+-r requirements-vertex-sdk.txt
+tqdm>=4.0

@@ -9,23 +9,38 @@ interface Problem {
   solution: string
   answer: string
   source: string
+  is_correct?: boolean // Added mapped field
+}
+
+interface ResultData {
+  problem_id: number
+  is_correct: boolean
 }
 
 export default function ProblemViewer() {
   const [problems, setProblems] = useState<Problem[]>([])
   const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState<'all' | 'correct' | 'incorrect'>('all')
 
   useEffect(() => {
-    fetch('/numina_eval_balanced.json')
-      .then(res => res.json())
-      .then(json => {
-        setProblems(json)
-        setLoading(false)
+    Promise.all([
+      fetch('/numina_eval_balanced.json').then(res => res.json()),
+      fetch('/results/numina_balanced_results.json').then(res => res.json()).catch(() => ({ results: [] }))
+    ]).then(([problemsData, resultsData]) => {
+      // Map results to problems
+      const mappedProblems = problemsData.map((p: any, idx: number) => {
+        const resultMatch = resultsData.results?.find((r: any) => r.problem_id === idx)
+        return {
+          ...p,
+          is_correct: resultMatch ? resultMatch.is_correct : undefined
+        }
       })
-      .catch(err => {
-        console.error('Failed to load problems:', err)
-        setLoading(false)
-      })
+      setProblems(mappedProblems)
+      setLoading(false)
+    }).catch(err => {
+      console.error('Failed to load problems or results:', err)
+      setLoading(false)
+    })
   }, [])
 
   if (loading) return (
@@ -51,76 +66,109 @@ export default function ProblemViewer() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-8">
-        {problems.slice(0, 20).map((p, idx) => (
-          <div key={idx} className="glass rounded-[32px] border-white/5 overflow-hidden card-hover group">
-            <div className="px-8 py-6 border-b border-white/5 bg-white/[0.02] flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <span className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400 border border-white/5">
-                  #{idx + 1}
-                </span>
-                <span className="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-bold uppercase tracking-wider border border-cyan-500/20">
-                  {p.source}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Expected Answer</span>
-                <div className="px-4 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 text-sm font-bold border border-emerald-500/20 shadow-lg shadow-emerald-500/5 overflow-x-auto max-w-sm custom-scrollbar">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkMath]}
-                    rehypePlugins={[rehypeKatex]}
-                    components={{ p: ({ node, ...props }) => <span {...props} /> }}
-                  >
-                    {`$${p.answer}$`}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-8 space-y-8">
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-widest">
-                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
-                  Problem Statement
-                </div>
-                <div className="text-lg text-slate-100 leading-relaxed font-serif bg-slate-900/40 p-8 rounded-3xl border border-white/5 shadow-inner prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkMath]}
-                    rehypePlugins={[rehypeKatex]}
-                  >
-                    {p.problem}
-                  </ReactMarkdown>
-                </div>
-              </div>
-
-              <details className="group/details">
-                <summary className="flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer hover:text-slate-300 transition-colors uppercase tracking-widest list-none">
-                  <span className="w-4 h-4 rounded-md bg-slate-800 flex items-center justify-center group-open/details:rotate-90 transition-transform">
-                    <svg width="6" height="10" viewBox="0 0 6 10" fill="none"><path d="M1 1L5 5L1 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  </span>
-                  Show Chain of Thought
-                </summary>
-                <div className="mt-6 text-slate-400 text-sm leading-relaxed bg-indigo-500/[0.03] p-8 rounded-3xl border border-indigo-500/10 font-mono prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkMath]}
-                    rehypePlugins={[rehypeKatex]}
-                  >
-                    {p.solution}
-                  </ReactMarkdown>
-                </div>
-              </details>
-            </div>
-          </div>
-        ))}
+      {/* Filters */}
+      <div className="flex gap-2 p-1.5 glass w-fit rounded-2xl border-white/5">
+        <button
+          onClick={() => setFilter('all')}
+          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${filter === 'all' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
+        >
+          All
+        </button>
+        <button
+          onClick={() => setFilter('correct')}
+          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${filter === 'correct' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-emerald-400/70 hover:bg-emerald-500/10'}`}
+        >
+          Correct
+        </button>
+        <button
+          onClick={() => setFilter('incorrect')}
+          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${filter === 'incorrect' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-rose-400/70 hover:bg-rose-500/10'}`}
+        >
+          Incorrect
+        </button>
       </div>
 
-      {problems.length > 20 && (
-        <div className="py-12 text-center">
-          <button className="px-8 py-3 rounded-2xl glass border-white/10 text-slate-400 font-bold hover:text-white hover:border-cyan-500/50 transition-all">
-            Load More Problems
-          </button>
-        </div>
-      )}
+      <div className="grid grid-cols-1 gap-8">
+        {problems
+          .filter(p => {
+            if (filter === 'correct') return p.is_correct === true
+            if (filter === 'incorrect') return p.is_correct === false || p.is_correct === undefined // Treat unmapped as incorrect for now or just false
+            return true
+          })
+          .map((p, idx) => (
+            <div key={idx} className="glass rounded-[32px] border-white/5 overflow-hidden card-hover group relative">
+
+              {/* Success/Fail Badge */}
+              {p.is_correct !== undefined && (
+                <div className={`absolute top-6 right-8 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10 shadow-lg ${p.is_correct
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-emerald-500/20'
+                    : 'bg-rose-500/20 text-rose-400 border-rose-500/30 shadow-rose-500/20'
+                  }`}>
+                  {p.is_correct ? '✅ Correct' : '❌ Incorrect'}
+                </div>
+              )}
+
+              <div className={`px-8 py-6 border-b border-white/5 flex justify-between items-center ${p.is_correct === true ? 'bg-emerald-500/[0.02]' : p.is_correct === false ? 'bg-rose-500/[0.02]' : 'bg-white/[0.02]'
+                }`}>
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400 border border-white/5">
+                    #{idx + 1}
+                  </span>
+                  <span className="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-bold uppercase tracking-wider border border-cyan-500/20">
+                    {p.source}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 pr-32"> {/* Added padding to avoid overlapping with badge */}
+                  <span className="text-xs text-slate-500 font-medium whitespace-nowrap">Expected Answer</span>
+                  <div className="px-4 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 text-sm font-bold border border-emerald-500/20 shadow-lg shadow-emerald-500/5 overflow-x-auto max-w-sm custom-scrollbar">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                      components={{ p: ({ node, ...props }) => <span {...props} /> }}
+                    >
+                      {`$${p.answer}$`}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-8 space-y-8">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
+                    Problem Statement
+                  </div>
+                  <div className="text-lg text-slate-100 leading-relaxed font-serif bg-slate-900/40 p-8 rounded-3xl border border-white/5 shadow-inner prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                    >
+                      {p.problem}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+
+                <details className="group/details">
+                  <summary className="flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer hover:text-slate-300 transition-colors uppercase tracking-widest list-none">
+                    <span className="w-4 h-4 rounded-md bg-slate-800 flex items-center justify-center group-open/details:rotate-90 transition-transform">
+                      <svg width="6" height="10" viewBox="0 0 6 10" fill="none"><path d="M1 1L5 5L1 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </span>
+                    Show Chain of Thought
+                  </summary>
+                  <div className="mt-6 text-slate-400 text-sm leading-relaxed bg-indigo-500/[0.03] p-8 rounded-3xl border border-indigo-500/10 font-mono prose prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-slate-800">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                    >
+                      {p.solution}
+                    </ReactMarkdown>
+                  </div>
+                </details>
+              </div>
+            </div>
+          ))}
+      </div>
+
     </div>
   )
 }

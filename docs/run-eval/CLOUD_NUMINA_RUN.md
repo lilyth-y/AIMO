@@ -46,7 +46,7 @@ bash scripts/vertex/run_aimo_gcp_smoke.sh
 - `requirements.txt`에는 **torch·transformers·CUDA 휠** 등이 포함되어 **수 GB**를 쓴다. `pip install --user`는 **`~/.local`(홈 디스크)** 에 쌓여 **`No space left on device`** 가 나기 쉽다.
 - **Vertex 연동만 먼저 확인**할 때는 **전체 `requirements.txt`를 홈에 설치하지 말 것.**
 
-**A) Vertex 스모크만 (최소, 권장 첫 단계)**
+**A) Vertex Gemini 스모크만 (최소, 권장 첫 단계)**
 
 패키지는 **홈이 아니라 `/tmp`** 에 두고, 캐시도 `/tmp` 로 보낸다.
 
@@ -60,6 +60,11 @@ export GOOGLE_CLOUD_PROJECT=gen-lang-client-0300734101
 export GOOGLE_CLOUD_LOCATION=us-central1
 python3 examples/quick_vertex_test.py
 ```
+
+**A2) Vertex Online Prediction 엔드포인트 품질 평가만** (`eval_vertex_endpoint_quality.py`) — SDK + `src` 경로:
+
+- 상세: [CLOUD_SHELL_ENDPOINT_EVAL.md](CLOUD_SHELL_ENDPOINT_EVAL.md)
+- 의존성: `requirements-cloudshell-endpoint-eval.txt` → `PYTHONPATH="/tmp/aimo-pypi:${PYTHONPATH}:${PWD}/src"`
 
 **B) 전체 스택을 Cloud Shell에서 꼭 쓸 때 (orchestrator + `run_numina_evaluation.py`)**
 

@@ -12,10 +12,15 @@ GCP 인증·ADC·서비스 계정 JSON: [../vertex/GCP_AUTH.md](../vertex/GCP_AU
 | 단계 | 내용 |
 |------|------|
 | 1 | 저장소 클론·루트·의존성: [CLOUD_NUMINA_RUN.md](CLOUD_NUMINA_RUN.md) |
-| 2 | 고정 프로젝트·버킷·엔드포인트 ID: [AIMO_GCP_PROFILE.md](../vertex/AIMO_GCP_PROFILE.md) |
-| 3 | 연결 스모크: `bash scripts/vertex/run_aimo_gcp_smoke.sh` |
-| 4 | `vertex-eval` 이미지: Cloud Build ([AIMO_GCP_PROFILE.md](../vertex/AIMO_GCP_PROFILE.md) §vertex-eval 이미지 빌드) |
-| 5 | 평가 데이터 `gs://.../numinamath_full.jsonl` 업로드 후 **Custom Job** 제출 (같은 문서 §Job 제출) |
+| 2 | 엔드포인트 eval 전용 최소 설치: [CLOUD_SHELL_ENDPOINT_EVAL.md](CLOUD_SHELL_ENDPOINT_EVAL.md) (`requirements-cloudshell-endpoint-eval.txt`) |
+| 3 | 고정 프로젝트·버킷·엔드포인트 ID: [AIMO_GCP_PROFILE.md](../vertex/AIMO_GCP_PROFILE.md) |
+| 4 | 연결 스모크: `bash scripts/vertex/run_aimo_gcp_smoke.sh` |
+| 5 | `vertex-eval` 이미지: Cloud Build ([AIMO_GCP_PROFILE.md](../vertex/AIMO_GCP_PROFILE.md) §vertex-eval 이미지 빌드) |
+| 6 | 평가 데이터 `gs://.../numinamath_full.jsonl` 업로드 후 **Custom Job** 제출 (같은 문서 §Job 제출) |
+
+**엔드포인트 스모크 한 줄** (추출·타임아웃 확인):
+
+`python3 scripts/vertex/eval_vertex_endpoint_quality.py --endpoint-id ... --n-problems 2 --dump-predictions 2 --predict-timeout 20 --vertex-predict-retries 0 --max-format-retries 0`
 
 ## 무엇이 “통과”인가
 

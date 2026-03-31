@@ -14,6 +14,7 @@ except ImportError:
     PSUTIL_AVAILABLE = False
 
 
+@pytest.mark.slow
 class TestExecutionResourceLimits:
     """실행 리소스 제한 테스트"""
     

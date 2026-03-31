@@ -11,6 +11,7 @@ SymPy 기반 정규화를 통해 잘못된 불일치를 감소시킵니다.
 """
 
 from typing import Any, Optional, Dict
+import re
 from dataclasses import dataclass
 from .stage5_verification import VerificationRouter
 from .answer_extraction import extract_answer_from_reasoning
@@ -56,6 +57,49 @@ class ReasoningReconciler:
         """
         self.verifier = verifier if verifier else VerificationRouter()
 
+    @staticmethod
+    def _is_snake_case_extracted_garbage(raw: str) -> bool:
+        """
+        Multi-segment snake_case tokens (e.g. placeholders like foo_bar_123) are not
+        math answers; SymPy may still sympify them and produce misleading MISMATCH_LOGIC.
+        """
+        t = raw.strip()
+        return "_" in t and t.count("_") >= 2
+
+    def _is_reconciliation_parse_noise(self, raw: Any, parsed: Any) -> bool:
+        """
+        SymPy sympify turns arbitrary English words into bare Symbols; treat those as
+        unparseable answers so callers get ERROR_PARSING (not MISMATCH_LOGIC).
+        """
+        if raw is None or parsed is None:
+            return False
+        if not isinstance(raw, str):
+            return False
+        t = raw.strip()
+        if SYMPY_AVAILABLE and isinstance(parsed, sp.Symbol):
+            if t != parsed.name:
+                return False
+            if len(t) == 1 and t.isalpha():
+                return False
+            if t.lower() in ("pi", "e", "i", "oo"):
+                return False
+            greek = (
+                "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta",
+                "iota", "kappa", "lambda", "mu", "nu", "xi", "omicron", "rho", "sigma",
+                "tau", "upsilon", "phi", "chi", "psi", "omega",
+            )
+            if t.lower() in greek:
+                return False
+            return bool(re.fullmatch(r"[A-Za-z]+", t))
+        # Fallback when VerificationRouter returns the original string (no SymPy / sympify failed)
+        if isinstance(parsed, str) and t == parsed.strip():
+            if len(t) == 1 and t.isalpha():
+                return False
+            if t.lower() in ("pi", "e", "i"):
+                return False
+            return bool(re.fullmatch(r"[A-Za-z]+", t) and len(t) > 1)
+        return False
+
     def reconcile(self, extracted_answer: Any, execution_result: Any) -> ReconciliationResult:
         """
         추출된 답변과 실행 결과를 조정합니다.
@@ -71,9 +115,35 @@ class ReasoningReconciler:
             logger.debug("Reconciliation failed: One of the answers is None")
             return ReconciliationResult(False, 'ERROR_MISSING', "One of the answers is None")
 
+        if isinstance(extracted_answer, str) and self._is_snake_case_extracted_garbage(extracted_answer):
+            return ReconciliationResult(
+                False,
+                "ERROR_PARSING",
+                f"Parsing error: cannot interpret extracted answer as math: '{extracted_answer}'",
+            )
+        if isinstance(execution_result, str) and self._is_snake_case_extracted_garbage(execution_result):
+            return ReconciliationResult(
+                False,
+                "ERROR_PARSING",
+                f"Parsing error: cannot interpret execution result as math: '{execution_result}'",
+            )
+
         # 1. Parse both to comparable forms
         parsed_ex = self.verifier._parse_answer(extracted_answer)
         parsed_exec = self.verifier._parse_answer(execution_result)
+
+        if self._is_reconciliation_parse_noise(extracted_answer, parsed_ex):
+            return ReconciliationResult(
+                False,
+                "ERROR_PARSING",
+                f"Cannot parse extracted answer as math: '{extracted_answer}'",
+            )
+        if self._is_reconciliation_parse_noise(execution_result, parsed_exec):
+            return ReconciliationResult(
+                False,
+                "ERROR_PARSING",
+                f"Cannot parse execution result as math: '{execution_result}'",
+            )
 
         if parsed_ex is None or parsed_exec is None:
             logger.debug(f"Reconciliation failed: Cannot parse - Ex='{extracted_answer}', Exec='{execution_result}'")

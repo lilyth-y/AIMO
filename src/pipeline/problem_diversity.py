@@ -27,8 +27,9 @@ class ProblemDiversityAnalyzer:
             ],
             'Number Theory': [
                 'prime', 'gcd', 'lcm', 'mod', 'divisible', 'integer',
-                'factor', 'congruence', 'diophantine', 'modular',
-                'composite', 'coprime', 'euclidean', 'fermat', 'wilson'
+                'congruence', 'diophantine', 'modular',
+                'remainder', 'divided by', 'composite', 'coprime',
+                'euclidean', 'fermat', 'wilson'
             ],
             'Algebra': [
                 'polynomial', 'factor', 'expand', 'root', 'quadratic',
@@ -38,16 +39,18 @@ class ProblemDiversityAnalyzer:
             'Combinatorics': [
                 'permutation', 'combination', 'arrangement', 'count',
                 'choose', 'binomial', 'pigeonhole', 'graph', 'tree',
-                'path', 'cycle', 'matching', 'coloring', 'partition'
+                'path', 'cycle', 'matching', 'coloring', 'partition',
+                'ways to', 'how many ways', 'arrange'
             ],
             'Calculus': [
                 'limit', 'derivative', 'integral', 'series', 'converge',
                 'diverge', 'taylor', 'fourier', 'optimization', 'critical',
-                'inflection', 'asymptote', 'continuity', 'differentiable'
+                'inflection', 'asymptote', 'continuity', 'differentiable',
+                'f(x)', 'maximum value', 'minimum value', 'local maximum', 'local minimum'
             ],
             'Inequalities': [
-                'inequality', 'greater', 'less', 'maximum', 'minimum',
-                'am-gm', 'cauchy', 'schwarz', 'jensen', 'holder'
+                'inequality', 'am-gm', 'cauchy', 'schwarz', 'jensen', 'holder',
+                'rearrangement', 'chebyshev', 'muirhead'
             ],
             'Logic': [
                 'puzzle', 'constraint', 'logic', 'satisfy', 'condition',
@@ -86,16 +89,36 @@ class ProblemDiversityAnalyzer:
             도메인 이름 (Geometry, Number Theory, Algebra, 등)
         """
         problem_lower = problem_text.lower()
+
+        # High-precision rules (avoid keyword-score ties)
+        if 'polynomial' in problem_lower:
+            return 'Algebra'
+        if 'remainder' in problem_lower or 'divided by' in problem_lower:
+            return 'Number Theory'
+        if 'how many ways' in problem_lower or 'ways to arrange' in problem_lower:
+            return 'Combinatorics'
+        if 'f(x)' in problem_lower and ('maximum' in problem_lower or 'minimum' in problem_lower):
+            return 'Calculus'
+
         domain_scores = {}
-        
         for domain, keywords in self.domain_keywords.items():
             score = sum(1 for kw in keywords if kw in problem_lower)
             if score > 0:
                 domain_scores[domain] = score
-        
+
         if domain_scores:
+            best_score = max(domain_scores.values())
+            candidates = [d for d, s in domain_scores.items() if s == best_score]
+            if len(candidates) > 1:
+                priority = [
+                    'Calculus', 'Number Theory', 'Algebra', 'Combinatorics',
+                    'Inequalities', 'Geometry', 'Probability', 'Logic',
+                ]
+                for dom in priority:
+                    if dom in candidates:
+                        return dom
             return max(domain_scores.items(), key=lambda x: x[1])[0]
-        
+
         return 'General'
     
     def classify_difficulty(self, problem_text: str, source: Optional[str] = None) -> str:

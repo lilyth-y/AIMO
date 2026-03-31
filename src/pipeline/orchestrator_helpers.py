@@ -9,6 +9,16 @@ import re
 from typing import Dict, Any, Optional
 
 
+def is_execution_error_output(s: Optional[str]) -> bool:
+    """
+    True if the string is a sandbox/executor failure line (e.g. ``Error: Timeout`` from
+    stage4, or legacy ``ERROR:``). Case-insensitive on the ``error:`` prefix.
+    """
+    if not isinstance(s, str) or not s.strip():
+        return False
+    return s.strip().lower().startswith("error:")
+
+
 def classify_problem(problem_text: str) -> str:
     """
     문제 유형을 분류합니다.
@@ -150,3 +160,16 @@ def map_reconciliation_status_to_refine_error(rec_status: str) -> str:
     }
     
     return mapping.get(rec_status, 'other')
+
+
+def solve_result_verification_fields(variables: Optional[Dict[str, Any]], verified: bool) -> Dict[str, Any]:
+    """
+    Returned with solve_problem so callers know whether ``verified`` was checked
+    against a reference (``variables['expected']``) or only internal pipeline checks.
+    Numina eval passes ``variables={}`` → verification_includes_reference_answer is False.
+    """
+    v = variables or {}
+    return {
+        "verified": verified,
+        "verification_includes_reference_answer": v.get("expected") is not None,
+    }

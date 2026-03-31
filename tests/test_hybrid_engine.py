@@ -3,7 +3,11 @@ Test script for Hybrid Reasoning Engine
 Tests the graph-based decomposition system
 """
 
+import pytest
+
 from src.pipeline.orchestrator import PipelineOrchestrator
+
+pytestmark = pytest.mark.slow
 
 def test_complex_problem():
     """

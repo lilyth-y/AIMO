@@ -39,6 +39,8 @@ evaluation_output.txt
 !generated_queries.json
 !data/numina_eval_balanced.json
 !data/eval/trusted_subset_seed.jsonl
+*.jsonl
+!data/eval/trusted_subset_seed.jsonl
 logs/
 results/
 
@@ -63,3 +65,10 @@ adaptive_knowledge.json
 fix_*.py
 *_temp.py
 *_backup.py
+
+# Cursor planning scratchpad (local-only)
+.cursor/plans/
+
+# Local experiment sandboxes (do not commit)
+tmp_vertex_smoke_*/
+venv_transformers*/

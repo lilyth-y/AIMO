@@ -261,13 +261,44 @@ SENTENCE_ANSWER_PATTERN = re.compile(
 )
 
 
+def extract_tail_answer_without_tags(text: str) -> Optional[str]:
+    """
+    <ANS> / \\boxed{} 를 이미 시도한 뒤에만 사용 (eval 보조 경로).
+    tail: answer is / 문장형 / 마지막 단순 숫자 줄 / MCQ 한 글자.
+    """
+    if not text or not str(text).strip():
+        return None
+    tail = text[-4000:] if len(text) > 4000 else text
+    tail = tail.strip()
+    last_num = LAST_NUMBER_REGEX.search(tail)
+    if last_num:
+        return last_num.group(1).strip()
+    sent_match = SENTENCE_ANSWER_PATTERN.search(tail)
+    if sent_match:
+        return sent_match.group(1).strip().rstrip(".")
+    for line in reversed(tail.split("\n")):
+        line = line.strip()
+        if not line:
+            continue
+        if len(line) <= 4 and re.match(r"^[A-Z]\.?$", line.replace(" ", "")):
+            return line[0].upper()
+        if SIMPLE_NUMBER_LINE.match(line) and len(line) <= 64:
+            return line.strip()
+    return None
+
+
 def extract_final_answer_from_output(output: str) -> str:
     """
     Extract the final answer from code execution output.
     Prefer lines that are explicitly labeled (Answer:, 결과:, 최종 답안:);
     otherwise use the last non-empty line that looks like a numeric answer.
     """
-    if not output or output.startswith("Error:"):
+    if output is None:
+        return "ERROR: EmptyOutput"
+    output = str(output)
+    if not output.strip():
+        return "ERROR: EmptyOutput"
+    if output.startswith("Error:"):
         return output.strip()
     # 모델 로드 실패 등으로 실행된 에러 메시지에서 숫자(예: 32-bit의 32)가 추출되지 않도록
     out_upper = output.upper()
@@ -279,6 +310,16 @@ def extract_final_answer_from_output(output: str) -> str:
     if sent_match:
         val = sent_match.group(1).strip().rstrip(".")
         return val if val else sent_match.group(1).strip()
+
+    # Heuristic: if output contains a LaTeX fraction anywhere, prefer the last one.
+    # Useful when code prints intermediate values plus a final TeX-form answer.
+    try:
+        tail = output[-4000:] if len(output) > 4000 else output
+        fracs = LATEX_FRAC_REGEX.findall(tail)
+        if fracs:
+            return fracs[-1]
+    except Exception:
+        pass
 
     lines = output.strip().split('\n')
     labeled_values = []
@@ -316,15 +357,58 @@ def extract_final_answer_from_output(output: str) -> str:
     match = re.search(r'[-+]?\d+\.?\d*(?:/\d+)?(?:[eE][-+]?\d+)?', final)
     if match:
         return match.group(0)
+    # If last line didn't match, as a last resort extract the last numeric token from the tail.
+    try:
+        tokens = re.findall(r'[-+]?\d+\.?\d*(?:/\d+)?(?:[eE][-+]?\d+)?', tail)
+        if tokens:
+            return tokens[-1]
+    except Exception:
+        pass
     return final
 
 def normalize_answer(ans: str) -> str:
     """Normalize answer string to canonical form."""
     if not ans:
         return ""
-    
+
+    ans = str(ans)
+
+    # LaTeX \\text{B} -> B (repeat for shallow nesting)
+    for _ in range(5):
+        next_a = re.sub(r"\\text\{([^}]*)\}", r"\1", ans)
+        if next_a == ans:
+            break
+        ans = next_a
+
+    # Currency / math-mode dollar markers (e.g. \\$63.78 vs 63.78)
+    ans = ans.replace("\\$", "")
+    ans = ans.replace("$", "")
+
+    # LaTeX layout helpers
+    ans = ans.replace("\\left", "").replace("\\right", "")
+    # Inline/display math wrappers
+    ans = ans.replace("\\(", "").replace("\\)", "").replace("\\[", "").replace("\\]", "")
+
+    # Minimal LaTeX -> sympy-friendly rewrites (avoid external latex parsers).
+    # \sqrt{a} -> sqrt(a)
+    for _ in range(10):
+        n = re.sub(r"\\sqrt\{([^{}]+)\}", r"sqrt(\1)", ans)
+        if n == ans:
+            break
+        ans = n
+    # \frac{a}{b} -> (a)/(b)
+    # (after sqrt rewrite so patterns like \frac{\sqrt{5}}{2} become \frac{sqrt(5)}{2})
+    for _ in range(10):
+        n = re.sub(r"\\frac\{([^{}]+)\}\{([^{}]+)\}", r"(\1)/(\2)", ans)
+        if n == ans:
+            break
+        ans = n
+    # \cdot -> *
+    ans = ans.replace("\\cdot", "*")
+    # If any stray LaTeX commands remain for sqrt (e.g. "\\sqrt(5)"), drop the backslash.
+    ans = ans.replace("\\sqrt", "sqrt")
+
     # Simple normalizations
-    ans = ans.replace("\\", "\\")  # keep latex as-is
     ans = re.sub(r"\s+", " ", ans)
     
     # Convert common variants
@@ -342,7 +426,32 @@ def normalize_answer(ans: str) -> str:
     
     # Remove common prefixes/suffixes
     ans = re.sub(r'^(Result|Answer|The answer is|Final answer|답변|결과)[:：\s]*', '', ans, flags=re.IGNORECASE)
-    ans = re.sub(r'[\(\)\[\]]', '', ans)  # Remove parentheses/brackets that are just formatting
+
+    # Strip *wrapping* parentheses/brackets that are just formatting.
+    # Do NOT remove all parentheses globally (it breaks expressions like sqrt(5)/2).
+    def _strip_wrapping(s: str) -> str:
+        s = s.strip()
+        for _ in range(5):
+            if len(s) >= 2 and ((s[0] == "(" and s[-1] == ")") or (s[0] == "[" and s[-1] == "]")):
+                inner = s[1:-1].strip()
+                # naive balance check for parentheses only (good enough for our answer strings)
+                bal = 0
+                ok = True
+                for ch in inner:
+                    if ch == "(":
+                        bal += 1
+                    elif ch == ")":
+                        bal -= 1
+                        if bal < 0:
+                            ok = False
+                            break
+                if ok and bal == 0:
+                    s = inner
+                    continue
+            break
+        return s
+
+    ans = _strip_wrapping(ans)
     
     # Basic power normalization caret->** (only for standalone expressions)
     if '^' in ans:

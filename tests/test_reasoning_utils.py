@@ -28,3 +28,15 @@ class TestExtractFinalAnswerFromOutput:
         """Error로 시작하면 그대로 반환"""
         output = "Error: NameError"
         assert extract_final_answer_from_output(output) == "Error: NameError"
+
+    def test_empty_output_becomes_error(self):
+        assert extract_final_answer_from_output("") == "ERROR: EmptyOutput"
+        assert extract_final_answer_from_output("   \n\n") == "ERROR: EmptyOutput"
+
+    def test_multiline_prefers_last_numeric_token(self):
+        output = "Part (I): c = (3.0, 6.0)\nPart (II): cos(theta) = 0.16666666666666666\n"
+        assert extract_final_answer_from_output(output) == "0.16666666666666666"
+
+    def test_multiline_prefers_last_latex_fraction(self):
+        output = "Intermediate: 0.3\nFinal: \\\\frac{1}{6}\n"
+        assert extract_final_answer_from_output(output) == r"\frac{1}{6}"

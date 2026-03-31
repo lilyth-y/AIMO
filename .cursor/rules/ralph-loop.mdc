@@ -91,6 +91,14 @@ while not complete and iteration < max_iterations:
 - Max: 3-5 iterations (configurable)
 - Special: Use RefineLoop from `src/pipeline/refine_loop.py` when working with orchestrator code
 
+**Accuracy (Ralph loop in Cursor)**:
+- Detect: User targets benchmark accuracy (e.g. **≥80%**), or runs `ralph_accuracy_gate`
+- Criteria: `python scripts/ralph_accuracy_gate.py <eval_results.json>` exits **0** (default target `AIMO_RALPH_TARGET_ACCURACY_PCT`, floor **80** = `TARGET_ACCURACY_EASY` min in `src/evaluation/config.py`)
+- Metric: `summary.accuracy` from `EvaluationMetrics.save_results` (grading = `check_answer_correctness`). Optional stratified mode: `AIMO_RALPH_GATE_MODE=easy` uses `by_difficulty.easy.accuracy`
+- Pipeline: set `AIMO_OPTIMIZE_ACCURACY=1` for eval runs (voting default on, default 4 candidates unless `OMI_NUM_CANDIDATES` set); ablate **one variable per experiment**
+- Implementation: `src/evaluation/ralph_accuracy.py`
+- **Vertex (endpoint eval, no local GPU)**: `docs/run-eval/RALPH_VERTEX.md` — `eval_vertex_endpoint_quality.py --enforce-ralph-accuracy`, `scripts/vertex/submit_vertex_eval_job.py`, `scripts/vertex/ralph_vertex_accuracy_gate.py` (summary JSON uses accuracy in [0,1])
+
 ## Progress Tracking (Automatic)
 
 Maintain progress state automatically:
@@ -148,6 +156,10 @@ while refine_loop.can_continue():
     if success:
         return result
 ```
+
+## Related: Numina medium accuracy (70–80%)
+
+When the task is **raising medium-difficulty benchmark accuracy** (not just lint/tests), also follow **`medium-accuracy-improvement-loop.mdc`**: fixed benchmark, tiered eval (1→2→3), **one variable per experiment**, and measurable completion (accuracy band + secondary failure rates).
 
 ## Key Principles
 
