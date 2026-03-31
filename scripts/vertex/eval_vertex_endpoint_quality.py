@@ -261,10 +261,9 @@ def _effective_predict_timeout(raw: float) -> float:
     최종값은 VERTEX_PREDICT_TIMEOUT_MAX(기본 600)으로 상한.
     """
     max_cap = _predict_timeout_max_cap()
-    floor = float(os.getenv("VERTEX_PREDICT_TIMEOUT_FLOOR", "600"))
-    # gRPC 기본(~60초)로 떨어지지만 않게 기본 최소를 90초로 둔다.
-    # (짧은 스모크에서 120 같은 값을 허용하기 위해 300처럼 크게 두지 않는다.)
-    minimum = float(os.getenv("VERTEX_PREDICT_TIMEOUT_MIN", "90"))
+    # Default "floor" is only used when caller passes <=0.
+    # Keep it modest so smoke runs don't waste minutes per call in Cloud Shell.
+    floor = float(os.getenv("VERTEX_PREDICT_TIMEOUT_FLOOR", "180"))
     if raw <= 0:
         r0 = min(floor, max_cap) if max_cap > 0 else floor
         sys.stderr.write(
@@ -273,12 +272,6 @@ def _effective_predict_timeout(raw: float) -> float:
         )
         return r0
     r = float(raw)
-    if r < minimum:
-        sys.stderr.write(
-            f"[vertex_eval] predict timeout {r}s < min {minimum}s → {minimum}s "
-            f"(VERTEX_PREDICT_TIMEOUT_MIN)\n"
-        )
-        r = minimum
     if max_cap > 0 and r > max_cap:
         sys.stderr.write(
             f"[vertex_eval] predict timeout {r}s > max {max_cap}s → {max_cap}s "
@@ -319,16 +312,28 @@ def _endpoint_predict_with_retries(
     for attempt in range(n):
         t0 = time.time()
         try:
-            # Some google-cloud-aiplatform versions don't accept `timeout=` on Endpoint.predict.
-            # Prefer passing it, but fall back to default if the SDK rejects the kwarg.
-            try:
-                resp = endpoint.predict(instances=instances, timeout=predict_timeout)
-            except TypeError as e:
-                msg = str(e)
-                if "timeout" in msg and ("unexpected" in msg or "got an unexpected keyword" in msg):
-                    resp = endpoint.predict(instances=instances)
-                else:
+            # Enforce wall-clock timeout ourselves.
+            # (Some google-cloud-aiplatform versions ignore/reject `timeout=` and then gRPC default
+            # behavior can look like "always 60s per problem".)
+            from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutTimeout
+
+            def _call_predict():
+                # Prefer passing timeout, but fall back if SDK rejects the kwarg.
+                try:
+                    return endpoint.predict(instances=instances, timeout=predict_timeout)
+                except TypeError as e:
+                    msg = str(e)
+                    if "timeout" in msg and ("unexpected" in msg or "got an unexpected keyword" in msg):
+                        return endpoint.predict(instances=instances)
                     raise
+
+            with ThreadPoolExecutor(max_workers=1) as ex:
+                fut = ex.submit(_call_predict)
+                try:
+                    resp = fut.result(timeout=float(predict_timeout))
+                except FutTimeout:
+                    last_err = f"predict_timeout_exceeded:{predict_timeout}s"
+                    raise RuntimeError(last_err)
             dt = time.time() - t0
             trace.append(
                 {
