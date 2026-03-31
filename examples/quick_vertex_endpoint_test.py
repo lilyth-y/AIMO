@@ -20,8 +20,14 @@ sys.path.insert(0, project_root)
 sys.path.insert(0, os.path.join(project_root, "src"))
 
 
+def _looks_like_execution_error(text: str) -> bool:
+    """Sandbox/executor failure line (kept local so this example runs without newer orchestrator_helpers)."""
+    if not isinstance(text, str) or not text.strip():
+        return False
+    return text.strip().lower().startswith("error:")
+
+
 def main() -> int:
-    from pipeline.orchestrator_helpers import is_execution_error_output
     from pipeline.vertex_endpoint_inference import is_vertex_endpoint_configured, predict_vertex_endpoint
 
     if not is_vertex_endpoint_configured():
@@ -34,7 +40,7 @@ def main() -> int:
     out = predict_vertex_endpoint(prompt, max_new_tokens=32, temperature=0.0)
     print("Prompt:", prompt)
     print("Response:", (out[:200] if out else "(empty)"))
-    if out and not is_execution_error_output(out):
+    if out and not _looks_like_execution_error(out):
         print("OK - Vertex Endpoint 연동 정상 동작")
         return 0
     print("실패 - 응답 확인")
