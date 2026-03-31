@@ -1,0 +1,6 @@
+# Vertex AI 학습/배포(SDK)용 의존성 (핵심)
+# pip install -r requirements-vertex-sdk.txt
+google-cloud-aiplatform==1.70.0
+google-cloud-storage==2.18.2
+# 평가 로그 → BigQuery: requirements-vertex-bq.txt
+# 보조 스크립트(HF 업로드/데이터셋/스모크 로그): requirements-vertex-tools.txt
