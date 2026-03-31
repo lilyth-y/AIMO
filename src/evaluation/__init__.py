@@ -7,6 +7,7 @@ from .evaluation_utils import (
     EvaluationResult,
     EvaluationMetrics,
     check_answer_correctness,
+    classify_answer_match,
     extract_aime_answer,
     determine_difficulty_from_source
 )
@@ -74,6 +75,7 @@ __all__ = [
     'EvaluationResult',
     'EvaluationMetrics',
     'check_answer_correctness',
+    'classify_answer_match',
     'extract_aime_answer',
     'determine_difficulty_from_source',
     'config'

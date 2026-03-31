@@ -11,16 +11,24 @@ EVAL_DIR = Path(__file__).parent
 SRC_DIR = EVAL_DIR.parent
 PROJECT_ROOT = SRC_DIR.parent
 
-# 데이터 디렉터리 경로 (여러 후보 위치 확인)
-DATA_DIRS = [
+# Kaggle/외부 환경: env로 데이터·결과 경로 override
+_AIMO_DATA = os.environ.get("AIMO_DATA_DIR") or os.environ.get("KAGGLE_DATA_DIR")
+_AIMO_RESULTS = os.environ.get("AIMO_RESULTS_DIR") or os.environ.get("KAGGLE_WORKING_DIR")
+
+# 데이터 디렉터리 경로 (env 우선, 그 다음 여러 후보)
+_DATA_CANDIDATES = [
     PROJECT_ROOT / 'data',
     PROJECT_ROOT / 'AIMO_core' / 'data',
     Path.cwd() / 'data',
     Path.cwd() / 'AIMO_core' / 'data',
 ]
+if _AIMO_DATA:
+    DATA_DIRS = [Path(_AIMO_DATA)] + _DATA_CANDIDATES
+else:
+    DATA_DIRS = _DATA_CANDIDATES.copy()
 
-# 결과 디렉터리
-RESULTS_DIR = PROJECT_ROOT / 'results'
+# 결과 디렉터리 (env 있으면 사용, 없으면 PROJECT_ROOT/results)
+RESULTS_DIR = Path(_AIMO_RESULTS) / 'results' if _AIMO_RESULTS else PROJECT_ROOT / 'results'
 
 # 로그 디렉터리
 LOGS_DIR = PROJECT_ROOT / 'logs'
@@ -73,3 +81,16 @@ NUMINA_TRAINING_FILE = 'numina_training_5k.jsonl'
 DEFAULT_MAX_PROBLEMS = None  # None이면 전체 평가
 DEFAULT_TIME_BUDGET = 60.0  # 초
 DEFAULT_USE_SYMPY = True  # SymPy 등가성 검사 사용 여부
+
+# 난이도별 목표 정확도 (%, min–max) — 리포팅/벤치마크 참고용
+TARGET_ACCURACY_EASY = (80, 90)    # Easy (Orca)
+TARGET_ACCURACY_MEDIUM = (60, 70)  # Medium (K-12)
+TARGET_ACCURACY_HARD = (30, 40)    # Hard (Olympiad)
+TARGET_ACCURACY_BY_DIFFICULTY = {
+    "easy": TARGET_ACCURACY_EASY,
+    "medium": TARGET_ACCURACY_MEDIUM,
+    "hard": TARGET_ACCURACY_HARD,
+}
+
+# Ralph loop default pass/fail floor (overall accuracy unless AIMO_RALPH_GATE_MODE=easy)
+RALPH_TARGET_ACCURACY_DEFAULT_PCT = float(TARGET_ACCURACY_EASY[0])

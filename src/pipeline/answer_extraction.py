@@ -59,12 +59,62 @@ class AnswerExtractor:
     
     def __init__(self):
         """초기화"""
-        self.ans_tag_pattern = r'<ANS>\s*(.+?)\s*</ANS>'
+        # *? : 빈 <ANS></ANS> 도 잡아 EMPTY 등으로 처리
+        self.ans_tag_pattern = r"<ANS>\s*(.*?)\s*</ANS>"
         self.float_pattern = r'^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$'
         self.int_pattern = r'^[-+]?[0-9]+$'
         self.latex_frac_pattern = r'\\frac\{([^}]+)\}\{([^}]+)\}'
         self.list_pattern = r'^\s*\[\s*(.+)\s*\]$'
         self.set_pattern = r'^\s*\{\s*(.+)\s*\}$'
+        
+        # Unicode symbolic normalization mapping
+        self.symbol_map = {
+            'π': 'pi',
+            'τ': '2*pi',
+            '√': 'sqrt',
+            '∞': 'oo',
+            '≈': '=',
+            '≠': '!=',
+            '≤': '<=',
+            '≥': '>=',
+            '±': 'plus_minus',  # Special handling might be needed
+            '×': '*',
+            '÷': '/',
+            '⋅': '*',
+            '°': '*pi/180',
+            '½': '1/2',
+            '⅓': '1/3',
+            '⅔': '2/3',
+            '¼': '1/4',
+            '¾': '3/4',
+            '²': '**2',
+            '³': '**3',
+        }
+
+    def normalize_math_text(self, text: str) -> str:
+        """
+        유니코드 수학 기호를 표준 ASCII/LaTeX 형식으로 변환합니다.
+        
+        Args:
+            text: 정규화할 텍스트
+            
+        Returns:
+            정규화된 텍스트
+        """
+        if not text:
+            return ""
+            
+        # 1. 공백 정규화 (Zero-width spaces, Non-breaking spaces 등 제거)
+        text = re.sub(r'[\u200b\u200c\u200d\uFEFF\u00A0]', ' ', text)
+        
+        # 2. 기호 치환
+        for unicode_sym, ascii_sym in self.symbol_map.items():
+            text = text.replace(unicode_sym, ascii_sym)
+            
+        # 3. LaTeX 스타일 기호 간소화 (예: \pi -> pi)
+        text = text.replace('\\pi', 'pi').replace('\\infty', 'oo')
+        
+        return text.strip()
     
     def extract_from_text(self, text: str) -> ExtractionResult:
         """
@@ -79,7 +129,7 @@ class AnswerExtractor:
         text = text.strip() if text else ""
         
         # 1. <ANS> 태그 찾기
-        match = re.search(self.ans_tag_pattern, text, re.DOTALL)
+        match = re.search(self.ans_tag_pattern, text, re.DOTALL | re.IGNORECASE)
         if not match:
             return ExtractionResult(
                 value=None,
@@ -103,7 +153,7 @@ class AnswerExtractor:
             ExtractionResult
         """
         original = ans_text
-        ans_text = ans_text.strip()
+        ans_text = self.normalize_math_text(ans_text)
         
         # 2. 빈 문자열 처리
         if not ans_text:
@@ -391,13 +441,21 @@ class AnswerExtractor:
                 )
             
             # SymPy로 파싱
-            expr = sp.sympify(ans_text)  # type: ignore[misc]
+            # implicit multiplication 허용 (예: 2x -> 2*x)
+            from sympy.parsing.sympy_parser import (
+                parse_expr, standard_transformations, 
+                implicit_multiplication_application
+            )
+            transformations = (standard_transformations + (implicit_multiplication_application,))
+            
+            # Use parse_expr for more robust parsing than sympify
+            expr = parse_expr(ans_text, transformations=transformations)
             
             return ExtractionResult(
                 value=expr,
                 format="SYMPY_EXPR",
                 original_text=original,
-                confidence=0.85  # 약간 낮은 신뢰도 (해석의 여지 있음)
+                confidence=0.9  # Normalization increased confidence
             )
         except Exception as e:
             logger.debug(f"SymPy parsing failed: {e}")
