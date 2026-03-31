@@ -115,6 +115,19 @@ def load_numina_jsonl_filtered(
     path = find_data_file(filename)
     rng = __import__("random").Random(seed)
     pool: List[ProblemItem] = []
+    # Diagnostics so Cloud Shell users can see why pool is empty.
+    stats: Dict[str, int] = {
+        "lines_total": 0,
+        "lines_empty": 0,
+        "json_parse_fail": 0,
+        "missing_problem": 0,
+        "filtered_non_numeric_answer": 0,
+        "filtered_source_allowlist": 0,
+        "filtered_difficulty_cap": 0,
+        "accepted": 0,
+    }
+    src_counts: Dict[str, int] = {}
+    src_kept: Dict[str, int] = {}
     cap: Optional[str] = None
     if difficulty_at_most:
         cap = difficulty_at_most.strip().lower()
@@ -122,31 +135,62 @@ def load_numina_jsonl_filtered(
             raise ValueError(f"difficulty-at-most must be easy|medium|hard, got {difficulty_at_most!r}")
     with open(path, "r", encoding="utf-8") as f:
         for i, line in enumerate(f):
+            stats["lines_total"] += 1
             line = line.strip()
             if not line:
+                stats["lines_empty"] += 1
                 continue
             try:
                 obj = json.loads(line)
             except Exception:
+                stats["json_parse_fail"] += 1
                 continue
             problem = obj.get("problem") or ""
             answer = obj.get("answer")
             source_raw = obj.get("source") or "unknown"
             src_norm = str(source_raw).strip().lower()
+            src_counts[src_norm] = src_counts.get(src_norm, 0) + 1
             if not isinstance(problem, str) or not problem.strip():
+                stats["missing_problem"] += 1
                 continue
             if _looks_non_numeric_answer(answer):
+                stats["filtered_non_numeric_answer"] += 1
                 continue
             if sources_allowlist is not None and len(sources_allowlist) > 0:
                 if src_norm not in sources_allowlist:
+                    stats["filtered_source_allowlist"] += 1
                     continue
             if cap is not None:
                 d = determine_difficulty_from_source(src_norm)
                 if _difficulty_rank(d) > _difficulty_rank(cap):
+                    stats["filtered_difficulty_cap"] += 1
                     continue
             pool.append(ProblemItem(idx=i, problem=problem, answer=str(answer), source=str(source_raw)))
+            src_kept[src_norm] = src_kept.get(src_norm, 0) + 1
+            stats["accepted"] += 1
     if len(pool) < n:
-        raise RuntimeError(f"요청 n={n}, 사용 가능={len(pool)} in {path}")
+        # Show top sources to make it obvious when e.g. all are 'olympiads' (hard).
+        top_src = sorted(src_counts.items(), key=lambda kv: kv[1], reverse=True)[:10]
+        top_kept = sorted(src_kept.items(), key=lambda kv: kv[1], reverse=True)[:10]
+        detail = {
+            "file": str(path),
+            "requested_n": n,
+            "available": len(pool),
+            "difficulty_at_most": cap,
+            "sources_allowlist": sorted(list(sources_allowlist))[:20] if sources_allowlist else [],
+            "stats": stats,
+            "top_sources_total": top_src,
+            "top_sources_kept": top_kept,
+            "hint": (
+                "Pool is empty often because --difficulty-at-most filters out all sources "
+                "(e.g. 'olympiads' => hard). Try removing --difficulty-at-most or set it to hard, "
+                "or pass --sources to target easy/medium sources."
+            ),
+        }
+        raise RuntimeError(
+            f"요청 n={n}, 사용 가능={len(pool)} in {path}\n"
+            + json.dumps(detail, ensure_ascii=False, indent=2)
+        )
     rng.shuffle(pool)
     return pool[:n]
 
