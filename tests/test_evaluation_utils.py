@@ -6,6 +6,8 @@ import 및 기본 기능이 잘 작동하는지 확인합니다.
 import sys
 import os
 
+import pytest
+
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
 
@@ -40,13 +42,11 @@ def test_imports():
             check_answer_correctness
         )
         print("[OK] evaluation 모듈 import 성공")
-        
-        return True
     except Exception as e:
         print(f"[ERROR] Import 실패: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(str(e))
 
 def test_evaluation_result():
     """EvaluationResult 클래스 테스트"""
@@ -74,13 +74,11 @@ def test_evaluation_result():
         assert result_dict['is_correct'] == True
         assert result_dict['reference_answer'] == "42"
         print("[OK] EvaluationResult 생성 및 to_dict() 성공")
-        
-        return True
     except Exception as e:
         print(f"[ERROR] EvaluationResult 테스트 실패: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(str(e))
 
 def test_evaluation_metrics():
     """EvaluationMetrics 클래스 테스트"""
@@ -120,13 +118,11 @@ def test_evaluation_metrics():
         # 요약 출력 테스트
         print("\n요약 출력:")
         metrics.print_summary()
-        
-        return True
     except Exception as e:
         print(f"[ERROR] EvaluationMetrics 테스트 실패: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(str(e))
 
 def test_answer_correctness():
     """답변 정확도 검사 함수 테스트"""
@@ -153,13 +149,11 @@ def test_answer_correctness():
         # N/A 처리
         assert check_answer_correctness("42", "N/A") == False
         print("[OK] N/A 처리 검사 성공")
-        
-        return True
     except Exception as e:
         print(f"[ERROR] 답변 정확도 검사 테스트 실패: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(str(e))
 
 def test_config_paths():
     """설정 파일 경로 테스트"""
@@ -192,13 +186,11 @@ def test_config_paths():
             print(f"[OK] AIME 데이터 파일 찾기 성공: {path}")
         except FileNotFoundError as e:
             print(f"[WARN] AIME 데이터 파일 없음 (예상 가능): {AIME_VALIDATION_FILE}")
-        
-        return True
     except Exception as e:
         print(f"[ERROR] 설정 파일 경로 테스트 실패: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(str(e))
 
 def test_utility_functions():
     """유틸리티 함수 테스트"""
@@ -223,13 +215,11 @@ def test_utility_functions():
         assert determine_difficulty_from_source("amc_aime") == "hard"
         assert determine_difficulty_from_source("unknown") == "medium"
         print("[OK] 난이도 결정 성공")
-        
-        return True
     except Exception as e:
         print(f"[ERROR] 유틸리티 함수 테스트 실패: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        pytest.fail(str(e))
 
 def main():
     """모든 테스트 실행"""
@@ -249,8 +239,8 @@ def main():
     results = []
     for test in tests:
         try:
-            result = test()
-            results.append(result)
+            test()
+            results.append(True)
         except Exception as e:
             print(f"[ERROR] 테스트 실행 중 오류: {e}")
             results.append(False)

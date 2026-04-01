@@ -90,24 +90,23 @@ def test_script_imports():
         print(f"[ERROR] 데이터 파일 경로 확인 실패: {e}")
         results.append(False)
     
-    return results
+    assert all(results), f"Some evaluation script dependency imports failed: {results}"
 
 def main():
-    results = test_script_imports()
-    
+    try:
+        test_script_imports()
+    except AssertionError as e:
+        print("\n" + "="*70)
+        print("테스트 결과 요약")
+        print("="*70)
+        print(f"[FAIL] {e}")
+        return 1
+
     print("\n" + "="*70)
     print("테스트 결과 요약")
     print("="*70)
-    passed = sum(results)
-    total = len(results)
-    print(f"통과: {passed}/{total}")
-    
-    if passed == total:
-        print("[SUCCESS] 모든 평가 스크립트 import 성공!")
-        return 0
-    else:
-        print("[WARN] 일부 import 실패 (의존성 문제일 수 있음)")
-        return 0  # import 실패는 치명적이지 않을 수 있음
+    print("[SUCCESS] 모든 평가 스크립트 import 성공!")
+    return 0
 
 if __name__ == "__main__":
     exit(main())

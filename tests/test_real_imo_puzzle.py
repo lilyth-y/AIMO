@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.real_inference]
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -71,11 +71,14 @@ def find_test_problems():
 
 def test_solve_real_problems(problems, max_problems=2):
     """실제 문제 해결 테스트"""
+    # Heavy: loads HF model and runs end-to-end solves. Opt-in only.
+    if os.environ.get("RUN_REAL_INFERENCE", "0") != "1":
+        pytest.skip("set RUN_REAL_INFERENCE=1 to enable real model inference test")
+
     print("\n" + "=" * 70)
     print("실제 문제 해결 테스트")
     print("=" * 70)
-    
-    import os
+
     os.environ['MATHCODEORCHESTRATOR_MODEL'] = 'Qwen/Qwen2-1.5B-Instruct'
     os.environ['MATHCODEORCHESTRATOR_QUANTIZATION'] = '4bit'
     os.environ['HF_HOME'] = 'C:\\hf_cache'

@@ -3,16 +3,21 @@ Test script for Hybrid Reasoning Engine
 Tests the graph-based decomposition system
 """
 
+import os
+
 import pytest
 
 from src.pipeline.orchestrator import PipelineOrchestrator
 
 pytestmark = pytest.mark.slow
 
-def test_complex_problem():
+def test_complex_problem(monkeypatch):
     """
     Test with a complex multi-step problem
     """
+    # Default CI/unit runs: no real HF weights (slow tests still run; mock path only).
+    monkeypatch.setenv("AIMO_FAST_TEST", "1")
+
     print("="*60)
     print("Testing Hybrid Reasoning Engine")
     print("="*60)
@@ -52,10 +57,12 @@ def test_complex_problem():
     print(result)
     print("="*60)
 
-def test_simple_comparison():
+def test_simple_comparison(monkeypatch):
     """
     Compare simple problem handling (should not use hybrid engine)
     """
+    monkeypatch.setenv("AIMO_FAST_TEST", "1")
+
     print("\n\n" + "="*60)
     print("Testing Simple Problem (should use standard flow)")
     print("="*60)
@@ -83,8 +90,12 @@ def test_simple_comparison():
     print("="*60)
 
 if __name__ == "__main__":
+    os.environ.setdefault("AIMO_FAST_TEST", "1")
+    from _pytest.monkeypatch import MonkeyPatch
+
+    mp = MonkeyPatch()
     # Test 1: Complex problem (should use Hybrid Engine)
-    test_complex_problem()
-    
+    test_complex_problem(mp)
+
     # Test 2: Simple problem (should use standard flow)
-    test_simple_comparison()
+    test_simple_comparison(mp)

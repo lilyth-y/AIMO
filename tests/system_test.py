@@ -7,6 +7,8 @@ Tests imports, configurations, and basic functionality.
 import sys
 import os
 
+import pytest
+
 def test_imports():
     """Test all AIMO pipeline imports."""
     print("[TEST] Testing Moai System Imports...")
@@ -38,10 +40,9 @@ def test_imports():
         print("[OK] Reasoning utilities loaded")
 
         print("\n[SUCCESS] All imports successful!")
-        return True
     except Exception as e:
         print(f"[ERROR] Import error: {e}")
-        return False
+        pytest.fail(str(e))
 
 def test_config():
     """Test configuration settings."""
@@ -60,10 +61,9 @@ def test_config():
         print(f"[SCORE] Min Complexity Score: {config.COMPLEXITY_STRUCTURED_MIN_SCORE}")
 
         print("[OK] Configuration loaded correctly")
-        return True
     except Exception as e:
         print(f"[ERROR] Config error: {e}")
-        return False
+        pytest.fail(str(e))
 
 def test_compromise_logic():
     """Test the compromise point logic with different problem complexities."""
@@ -91,10 +91,9 @@ def test_compromise_logic():
             print(f"{emoji} {action} | Score: {complexity:>2} | {problem[:30]}...")
 
         print("✅ Compromise point logic working")
-        return True
     except Exception as e:
         print(f"❌ Compromise logic error: {e}")
-        return False
+        pytest.fail(str(e))
 
 def test_local_llm_client_creation():
     """Test LocalLLMClient can be instantiated (without actually loading model)."""
@@ -110,10 +109,9 @@ def test_local_llm_client_creation():
 
         # Don't actually load the model to avoid heavy memory usage
         print("✅ Mock client creation successful (no actual model loading)")
-        return True
     except Exception as e:
         print(f"❌ LLM Client creation error: {e}")
-        return False
+        pytest.fail(str(e))
 
 def test_solver_creation():
     """Test Solver can be instantiated."""
@@ -130,10 +128,10 @@ def test_solver_creation():
         else:
             print("❌ No LLM client found")
 
-        return True
+        assert hasattr(solver, "llm") and solver.llm, "LLM client should be attached to solver"
     except Exception as e:
         print(f"❌ Solver creation error: {e}")
-        return False
+        pytest.fail(str(e))
 
 def test_orchestrator_creation():
     """Test PipelineOrchestrator can be instantiated."""
@@ -151,11 +149,11 @@ def test_orchestrator_creation():
                 print(f"✅ {comp.capitalize()} component present")
             else:
                 print(f"❌ {comp.capitalize()} component missing")
-
-        return True
+        missing = [c for c in components if not hasattr(orchestrator, c)]
+        assert not missing, f"Missing orchestrator components: {missing}"
     except Exception as e:
         print(f"❌ Orchestrator creation error: {e}")
-        return False
+        pytest.fail(str(e))
 
 def run_all_tests():
     """Run all test functions."""
@@ -177,8 +175,11 @@ def run_all_tests():
 
     for test_name, test_func in tests:
         print(f"\n{'='*30} {test_name.upper()} {'='*30}")
-        if test_func():
+        try:
+            test_func()
             passed += 1
+        except AssertionError:
+            pass
 
     print(f"\n{'='*50}")
     print(f"🏁 Test Results: {passed}/{total} tests passed")
