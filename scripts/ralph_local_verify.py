@@ -14,6 +14,10 @@ Completion criteria addressed here (automated):
 One-variable rule: when tuning accuracy, change only one of
   AIMO_OPTIMIZE_ACCURACY, OMI_USE_VOTING, OMI_NUM_CANDIDATES, OMI_MODEL, … per run.
 
+Optional:
+  --tier3   Run ``scripts/ralph_tier3_numina_smoke.py`` after Tier 2 (small Numina eval +
+            gate; default mock expects gate FAIL).
+
 Exit 0 if all steps pass; else 1.
 """
 from __future__ import annotations
@@ -32,7 +36,7 @@ def _run(cmd: list[str], *, env: dict | None = None) -> int:
     return int(r.returncode)
 
 
-def main() -> int:
+def main(*, tier3: bool = False) -> int:
     banner = (
         __doc__
         + "\n"
@@ -77,8 +81,22 @@ def main() -> int:
     if _run([sys.executable, str(ROOT / "scripts" / "ralph_accuracy_gate.py"), str(fixture)]) != 0:
         return 1
 
+    if tier3:
+        print(
+            "\n[Tier 3] ralph_tier3_numina_smoke.py (mock eval + gate must FAIL at 80%)",
+            flush=True,
+        )
+        if (
+            _run(
+                [sys.executable, str(ROOT / "scripts" / "ralph_tier3_numina_smoke.py")],
+                env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+            )
+            != 0
+        ):
+            return 1
+
     print("\n" + "=" * 70, flush=True)
-    print("Ralph local verify: ALL PASS", flush=True)
+    print("Ralph local verify: ALL PASS" + (" (+ Tier 3)" if tier3 else ""), flush=True)
     print("Next (Tier 3 / accuracy work): run a real eval, save results JSON, then:", flush=True)
     print(
         "  AIMO_OPTIMIZE_ACCURACY=1  # one knob among many; ablate one variable per experiment",
@@ -94,4 +112,13 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import argparse
+
+    ap = argparse.ArgumentParser(description="Ralph local verification (see module docstring).")
+    ap.add_argument(
+        "--tier3",
+        action="store_true",
+        help="After Tier 2, run Numina smoke + gate (mock expects sub-80% gate failure).",
+    )
+    ns = ap.parse_args()
+    raise SystemExit(main(tier3=ns.tier3))

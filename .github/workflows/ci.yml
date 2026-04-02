@@ -57,6 +57,11 @@ jobs:
       - name: Ralph accuracy gate (fixture)
         run: python scripts/ralph_accuracy_gate.py tests/fixtures/ralph_gate_pass.json
 
+      - name: Ralph Tier 3 (Numina mock smoke + gate expect fail)
+        env:
+          PYTHONPATH: src
+        run: python scripts/ralph_tier3_numina_smoke.py
+
   docker-build:
     runs-on: ubuntu-latest
     steps:
