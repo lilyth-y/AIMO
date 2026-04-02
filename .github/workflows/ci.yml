@@ -3,9 +3,9 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, changes]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, changes]
 
 jobs:
   test:
@@ -52,7 +52,7 @@ jobs:
       - name: Run tests
         env:
           PYTHONPATH: src
-        run: pytest tests/ -q --tb=short --ignore=tests/test_evaluation_scripts.py
+        run: pytest tests/ -q --tb=short
 
   docker-build:
     runs-on: ubuntu-latest
