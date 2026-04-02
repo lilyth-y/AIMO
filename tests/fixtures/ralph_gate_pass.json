@@ -1,0 +1,8 @@
+{
+  "summary": {
+    "accuracy": 85.0,
+    "correct": 85,
+    "total": 100,
+    "dataset": "fixture_for_ralph_gate_ci"
+  }
+}

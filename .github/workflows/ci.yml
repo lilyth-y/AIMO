@@ -54,6 +54,9 @@ jobs:
           PYTHONPATH: src
         run: pytest tests/ -q --tb=short
 
+      - name: Ralph accuracy gate (fixture)
+        run: python scripts/ralph_accuracy_gate.py tests/fixtures/ralph_gate_pass.json
+
   docker-build:
     runs-on: ubuntu-latest
     steps:

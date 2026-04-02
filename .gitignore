@@ -38,6 +38,7 @@ evaluation_output.txt
 !generated_responses.json
 !generated_queries.json
 !data/numina_eval_balanced.json
+!tests/fixtures/ralph_gate_pass.json
 !data/eval/trusted_subset_seed.jsonl
 *.jsonl
 !data/eval/trusted_subset_seed.jsonl
