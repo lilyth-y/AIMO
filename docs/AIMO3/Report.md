@@ -1,3 +1,13 @@
+## 운영 동기화 메모
+
+이 문서는 아키텍처/연구 보고서 성격입니다. Vertex 운영 절차와 최신 스크립트 동작은 아래 문서를 기준으로 동기화합니다.
+
+- `docs/VERTEX_SCRIPTS_EVALUATION.md`
+- `docs/vertex/VERTEX_DOC_SYNC_CHECKLIST.md`
+- `docs/run-eval/REQUIREMENTS_SELECTION_GUIDE.md`
+
+---
+
 ## **시스템 아키텍처: 5-Stage Deep Reasoning Pipeline**
 
 우리는 인간 수학자의 사고 과정을 모방하여 설계된 **5단계 심층 추론 파이프라인(5-Stage Deep Reasoning Pipeline)**을 제안한다. 이 파이프라인은 각 단계가 모듈화되어 있으며, 단계별로 검증과 피드백 루프가 존재하여 오류를 조기에 차단한다.

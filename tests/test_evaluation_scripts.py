@@ -10,8 +10,8 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-def test_script_imports():
-    """각 평가 스크립트의 import 테스트"""
+def _collect_script_import_results():
+    """각 평가 스크립트 의존성 import 결과를 수집한다."""
     print("="*70)
     print("평가 스크립트 Import 테스트")
     print("="*70)
@@ -90,23 +90,25 @@ def test_script_imports():
         print(f"[ERROR] 데이터 파일 경로 확인 실패: {e}")
         results.append(False)
     
-    assert all(results), f"Some evaluation script dependency imports failed: {results}"
+    return results
+
+
+def test_script_imports():
+    """각 평가 스크립트의 import 테스트"""
+    results = _collect_script_import_results()
+    assert all(results), f"평가 스크립트 import 실패 항목 존재: {results}"
 
 def main():
-    try:
-        test_script_imports()
-    except AssertionError as e:
-        print("\n" + "="*70)
-        print("테스트 결과 요약")
-        print("="*70)
-        print(f"[FAIL] {e}")
-        return 1
+    results = _collect_script_import_results()
 
     print("\n" + "="*70)
     print("테스트 결과 요약")
     print("="*70)
-    print("[SUCCESS] 모든 평가 스크립트 import 성공!")
-    return 0
+    if all(results):
+        print("[SUCCESS] 모든 평가 스크립트 import 성공!")
+        return 0
+    print(f"[FAIL] 일부 import 실패: {results}")
+    return 1
 
 if __name__ == "__main__":
     exit(main())

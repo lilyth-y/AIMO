@@ -123,12 +123,12 @@ def test_solver_creation():
         print("✅ Solver created successfully")
 
         # Check if it has the llm client
-        if hasattr(solver, 'llm') and solver.llm:
+        has_llm = hasattr(solver, "llm") and solver.llm is not None
+        if has_llm:
             print("✅ LLM client attached to solver")
         else:
             print("❌ No LLM client found")
-
-        assert hasattr(solver, "llm") and solver.llm, "LLM client should be attached to solver"
+        assert has_llm, "Solver instance must have an initialized llm client"
     except Exception as e:
         print(f"❌ Solver creation error: {e}")
         pytest.fail(str(e))
@@ -143,13 +143,14 @@ def test_orchestrator_creation():
         print("✅ Orchestrator created successfully")
 
         # Check key components
-        components = ['router', 'executor', 'verifier', 'reconciler']
+        components = ["router", "executor", "verifier", "reconciler"]
+        missing = []
         for comp in components:
             if hasattr(orchestrator, comp):
                 print(f"✅ {comp.capitalize()} component present")
             else:
                 print(f"❌ {comp.capitalize()} component missing")
-        missing = [c for c in components if not hasattr(orchestrator, c)]
+                missing.append(comp)
         assert not missing, f"Missing orchestrator components: {missing}"
     except Exception as e:
         print(f"❌ Orchestrator creation error: {e}")
@@ -178,8 +179,8 @@ def run_all_tests():
         try:
             test_func()
             passed += 1
-        except AssertionError:
-            pass
+        except Exception as exc:
+            print(f"❌ {test_name} failed: {exc}")
 
     print(f"\n{'='*50}")
     print(f"🏁 Test Results: {passed}/{total} tests passed")

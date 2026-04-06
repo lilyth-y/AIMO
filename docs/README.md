@@ -68,6 +68,7 @@ docs/
 | [KAGGLE_RUN.md](run-eval/KAGGLE_RUN.md) | Kaggle에서 평가 돌리기 가정·권장 |
 | [KAGGLE_ENV_CHECK.md](run-eval/KAGGLE_ENV_CHECK.md) | Kaggle 실행 환경 점검 체크리스트 |
 | [CLOUD_NUMINA_RUN.md](run-eval/CLOUD_NUMINA_RUN.md) | **Numina 평가를 클라우드(Vertex/Kaggle)에서만** 돌리는 절차 |
+| [REQUIREMENTS_SELECTION_GUIDE.md](run-eval/REQUIREMENTS_SELECTION_GUIDE.md) | 실행 목적별 `requirements*.txt` 선택 매트릭스 |
 
 루트 **요구사항 파일**: `requirements.txt`(전체 스택) · `requirements-vertex.txt`(Gemini 최소) · [`requirements-cloudshell-smoke.txt`](../requirements-cloudshell-smoke.txt)(Cloud Shell에서 Vertex 스모크만, 홈 디스크 절약).
 
@@ -84,6 +85,7 @@ Kaggle에서 바로 실행하려면 **`notebooks/run_numina_on_kaggle.ipynb`** �
 | [MERGED_MODEL_ARTIFACT.md](vertex/MERGED_MODEL_ARTIFACT.md) | 머지 모델 아티팩트 |
 | [VERTEX_TRAIN_DEPLOY_QWEN.md](vertex/VERTEX_TRAIN_DEPLOY_QWEN.md) | 학습·배포 흐름 (Qwen 계열) |
 | [DEPLOY_QWEN_7B_VERTEX.md](vertex/DEPLOY_QWEN_7B_VERTEX.md) | 7B 배포 참고 |
+| [VERTEX_DOC_SYNC_CHECKLIST.md](vertex/VERTEX_DOC_SYNC_CHECKLIST.md) | Vertex 코드/문서 동기화 체크리스트 |
 | 기타 | 동 폴더의 `STEP1_*`, `STEP2_*`, `QUALITY_EXPERIMENT.md` 등 |
 
 루트 [VERTEX_SCRIPTS_EVALUATION.md](VERTEX_SCRIPTS_EVALUATION.md) 는 `scripts/vertex/` 실전 점검 요약이다.
