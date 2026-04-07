@@ -53,6 +53,21 @@ The fixture file is a known-pass case (85%). The tier-3 smoke test (`scripts/ral
 | `OMI_MODEL` / `AIMO_MODEL` | HuggingFace model repo ID | `Qwen/Qwen2.5-Math-7B-Instruct` |
 | `OMI_QUANTIZATION` / `AIMO_QUANTIZATION` | Quantization level | `8bit` |
 
+### Model selection (CPU-only environment)
+
+This Cloud Agent VM has no GPU. Available inference backends:
+
+1. **Qwen/Qwen2.5-Math-1.5B-Instruct** (CPU, `OMI_QUANTIZATION=none`): Works on this VM (~3GB RAM). Slow (~45s per problem for Simulator strategy, longer for multi-agent). Produces correct answers on simple/medium problems.
+2. **Vertex AI (Gemini)**: Requires `GOOGLE_GENAI_API_KEY` or `GOOGLE_CLOUD_PROJECT`. Fast and accurate. Preferred if credentials are available.
+3. **Qwen/Qwen2.5-Math-7B-Instruct**: Default model, needs ~14GB RAM on CPU. May work but very slow without GPU.
+
+To run real inference on CPU:
+```bash
+OMI_MODEL="Qwen/Qwen2.5-Math-1.5B-Instruct" OMI_QUANTIZATION="none" PYTHONPATH=src python3 examples/quick_eval.py
+```
+
+Quantization (`4bit`/`8bit`) requires CUDA GPU via bitsandbytes. On CPU, always use `OMI_QUANTIZATION=none`.
+
 ### Gotchas
 
 - The system Python is `python3`, not `python`. Use `python3` explicitly.
