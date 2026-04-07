@@ -1,5 +1,12 @@
 # Moai Roadmap / TODO (Prioritized)
 
+## 2026-04-07 실험 기반 TODO (capacity / latency / 429)
+
+- [ ] **P0** `cap=14` 재검증: 동일 3문항/동일 설정에서 외부 네트워크 영향 분리
+- [ ] **P0** 첫 429 감지 후 high-cost fallback(multi-agent) 강제 차단 회귀 테스트 추가
+- [ ] **P1** `cap=10` 고정 region 비교 확장(`us-east5`, `us-central1`) 및 시간대별 재현성 측정
+- [ ] **P1** quota 신청 템플릿에 `429`, `timeout`, `avg/p90 latency`, `problem당 LLM 호출수`를 필수 필드화
+
 Legend:
 - P0: Immediate impact / unblock correctness & data quality
 - P1: High impact next layer (robustness & learning)

@@ -98,7 +98,7 @@ python examples/run_numina_evaluation.py
 - [프로젝트 구조·순서](docs/structure/PROJECT_STRUCTURE_AND_ORDER.md)
 - [AIMO3 리포트](docs/AIMO3/Report.md)
 - [NuminaMath 통합](docs/guides/NUMINA_INTEGRATION.md) · [1.5 업그레이드](docs/guides/NUMINA_15_UPGRADE.md)
-- [requirements 선택 가이드](docs/run-eval/REQUIREMENTS_SELECTION_GUIDE.md) · [Vertex 문서 동기화 체크리스트](docs/vertex/VERTEX_DOC_SYNC_CHECKLIST.md)
+- [requirements 선택 가이드](docs/run-eval/REQUIREMENTS_SELECTION_GUIDE.md) · [Vertex 문서 동기화 체크리스트](docs/vertex/VERTEX_DOC_SYNC_CHECKLIST.md) · [Capacity+Token 실행 계획](docs/vertex/CAPACITY_AND_TOKEN_EFFICIENCY_EXECUTION_PLAN.md)
 
 ## 🧪 테스트
 

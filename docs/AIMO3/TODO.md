@@ -1,5 +1,16 @@
 # MathCodeOrchestrator Roadmap / TODO (Prioritized)
 
+## 2026-04-07 실험 기반 TODO (capacity / latency / 429)
+
+- [ ] **P0** `cap=14` 재검증: 동일 데이터 3문항에서 외부 네트워크 변수를 통제한 재실험 필요
+  - 실패 로그: `results/tier2_cap14_uscentral1_3_normal.log`, `results/tier2_cap14_uscentral1_3_normal_rerun.log`
+  - 관측: timeout 누적 + 간헐적 DNS/연결 오류
+- [ ] **P0** rate-limit 모드 강화: 첫 429 이후 `multi-agent`를 solve 스코프에서 완전 차단하는지 회귀 테스트 추가
+- [ ] **P0** stage별 토큰 상한 분리: reasoning/code/review 프롬프트별 budget을 분리해 fallback 폭증 억제
+- [ ] **P1** region 우선순위 정책: `us-east5` 우선, 실패 시 `us-central1`로 failover하는 운영 가이드 실험
+- [ ] **P1** capacity 신청 문서화: quota 요청 템플릿에 `429 빈도`, `p90 지연`, `문제당 호출 수` 필드를 고정
+- [ ] **P1** 반례 검증 스크립트: 동일 문제 셋을 지역/시간대별로 랜덤 순서 재실행해 변동성 측정
+
 Legend:
 - P0: Immediate impact / unblock correctness & data quality
 - P1: High impact next layer (robustness & learning)

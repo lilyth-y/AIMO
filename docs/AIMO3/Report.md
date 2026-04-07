@@ -8,6 +8,29 @@
 
 ---
 
+## 2026-04-07 Cloud 실험 기록 (capacity + token 구조)
+
+동일 스크립트 `examples/run_numina_evaluation.py` 기준으로 small batch 실험을 수행했다.
+원칙: 한 실험에서 한 변수만 변경.
+
+| 실험 | 설정(변경 변수) | 정확도 | 평균 solve 시간(s) | 총 평가 시간(s) | rate-limit(429) | 비고 |
+|---|---|---:|---:|---:|---:|---|
+| Tier1 smoke | `MAX_PROBLEMS=1`, `cap=12`, `us-central1` | 0.00% | 69.47 | 69.48 | 2 | 코드 실행 정상 |
+| Tier2-cap | `cap=10`, `us-central1`, 3문항 | 0.00% | 168.22 | 504.68 | 11 | multi-agent 미진입 |
+| Tier2-cap | `cap=12`, `us-central1`, 3문항 | 0.00% | 637.25 | 1911.75 | 29 | `LLM call budget exceeded` 10회, multi-agent 진입 |
+| Tier2-region | `cap=10`, `us-east5`, 3문항 | 33.33% | 93.62 | 280.88 | 0 | us-central1 대비 지연/429 개선 |
+
+실패/중단 런도 기록:
+
+- `cap=14`, `us-central1` 1차 런: 네트워크 오류(`NameResolutionError`, `getaddrinfo failed`, server disconnected) 포함으로 중단.
+- `cap=14`, `us-central1` 재실행: 장시간 지연 및 timeout 누적으로 중단.
+
+해석:
+
+1. 현재 병목은 단순 token 출력량이 아니라 **재시도 + fallback 경로 확산**이다.
+2. region 영향이 유의미하다. 같은 `cap=10`에서도 `us-east5`가 `us-central1`보다 안정적이었다.
+3. cap 상향(`10 -> 12`)은 이 샘플에서 오히려 latency 폭증과 multi-agent 진입 증가를 유발했다.
+
 ## **시스템 아키텍처: 5-Stage Deep Reasoning Pipeline**
 
 우리는 인간 수학자의 사고 과정을 모방하여 설계된 **5단계 심층 추론 파이프라인(5-Stage Deep Reasoning Pipeline)**을 제안한다. 이 파이프라인은 각 단계가 모듈화되어 있으며, 단계별로 검증과 피드백 루프가 존재하여 오류를 조기에 차단한다.

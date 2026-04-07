@@ -86,6 +86,7 @@ Kaggle에서 바로 실행하려면 **`notebooks/run_numina_on_kaggle.ipynb`** �
 | [VERTEX_TRAIN_DEPLOY_QWEN.md](vertex/VERTEX_TRAIN_DEPLOY_QWEN.md) | 학습·배포 흐름 (Qwen 계열) |
 | [DEPLOY_QWEN_7B_VERTEX.md](vertex/DEPLOY_QWEN_7B_VERTEX.md) | 7B 배포 참고 |
 | [VERTEX_DOC_SYNC_CHECKLIST.md](vertex/VERTEX_DOC_SYNC_CHECKLIST.md) | Vertex 코드/문서 동기화 체크리스트 |
+| [CAPACITY_AND_TOKEN_EFFICIENCY_EXECUTION_PLAN.md](vertex/CAPACITY_AND_TOKEN_EFFICIENCY_EXECUTION_PLAN.md) | 429 완화를 위한 capacity 신청 + token 효율화 실행 순서 |
 | 기타 | 동 폴더의 `STEP1_*`, `STEP2_*`, `QUALITY_EXPERIMENT.md` 등 |
 
 루트 [VERTEX_SCRIPTS_EVALUATION.md](VERTEX_SCRIPTS_EVALUATION.md) 는 `scripts/vertex/` 실전 점검 요약이다.

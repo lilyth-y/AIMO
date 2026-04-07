@@ -26,6 +26,7 @@ VERTEX_MAX_RETRIES = int(os.getenv("AIMO_VERTEX_MAX_RETRIES", "6"))
 VERTEX_RETRY_BASE_SECONDS = float(os.getenv("AIMO_VERTEX_RETRY_BASE_SECONDS", "1.0"))
 VERTEX_RETRY_MAX_SECONDS = float(os.getenv("AIMO_VERTEX_RETRY_MAX_SECONDS", "30.0"))
 VERTEX_REQUEST_TIMEOUT_SEC = float(os.getenv("AIMO_VERTEX_REQUEST_TIMEOUT_SEC", "60.0"))
+_LAST_RATE_LIMIT_SIGNAL = False
 
 
 def is_vertex_configured() -> bool:
@@ -47,6 +48,17 @@ def reset_vertex_genai_client_cache() -> None:
     """Clear cached google-genai Client (tests or after env/credential change)."""
     global _CACHED_GENAI
     _CACHED_GENAI = None
+
+
+def consume_vertex_rate_limit_signal() -> bool:
+    """
+    Return and clear whether a rate-limit signal occurred in recent generate_vertex call(s).
+    Used by upper pipeline to enter rate-limit-safe mode even if the final retry succeeded.
+    """
+    global _LAST_RATE_LIMIT_SIGNAL
+    v = bool(_LAST_RATE_LIMIT_SIGNAL)
+    _LAST_RATE_LIMIT_SIGNAL = False
+    return v
 
 
 def _get_genai_client():
@@ -82,6 +94,9 @@ def generate_vertex(prompt: str, model: Optional[str] = None, **kwargs) -> str:
     """
     model = model or os.getenv("VERTEX_AI_MODEL", DEFAULT_VERTEX_MODEL)
     max_tokens = kwargs.get("max_output_tokens", MAX_OUTPUT_TOKENS)
+
+    global _LAST_RATE_LIMIT_SIGNAL
+    _LAST_RATE_LIMIT_SIGNAL = False
 
     try:
         client = _get_genai_client()
@@ -146,6 +161,8 @@ def generate_vertex(prompt: str, model: Optional[str] = None, **kwargs) -> str:
                     or "rate" in msg.lower()
                     or "quota" in msg.lower()
                 )
+                if is_rate_limited:
+                    _LAST_RATE_LIMIT_SIGNAL = True
                 if not is_rate_limited or attempt >= VERTEX_MAX_RETRIES:
                     break
                 # Exponential backoff with jitter

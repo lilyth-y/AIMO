@@ -122,6 +122,33 @@ class LocalLLMClient:
         # Initialize model (lazy loading)
         self.model = None
         self.pipeline = None
+        self.last_rate_limited = False
+        self._llm_call_budget_cap = max(1, int(os.getenv("AIMO_LLM_CALL_CAP_PER_PROBLEM", "12")))
+        self._llm_call_count = 0
+
+    def reset_call_budget(self) -> None:
+        """Reset per-problem LLM call budget and transient rate-limit flag."""
+        self._llm_call_budget_cap = max(1, int(os.getenv("AIMO_LLM_CALL_CAP_PER_PROBLEM", "12")))
+        self._llm_call_count = 0
+        self.last_rate_limited = False
+
+    def _consume_call_budget(self) -> Optional[str]:
+        """Return error text if per-problem call budget is exceeded."""
+        if self._llm_call_count >= self._llm_call_budget_cap:
+            return (
+                f"ERROR: LLM call budget exceeded "
+                f"({self._llm_call_count}/{self._llm_call_budget_cap})"
+            )
+        self._llm_call_count += 1
+        return None
+
+    def _update_rate_limit_flag(self, text: Optional[str]) -> None:
+        """Track whether any provider response indicates rate limiting in this solve."""
+        if not isinstance(text, str):
+            return
+        s = text.upper()
+        if "RESOURCE_EXHAUSTED" in s or "429" in s or "TOO MANY REQUESTS" in s:
+            self.last_rate_limited = True
 
     def _ensure_tokenizer(self):
         """Lazy-load tokenizer only when local pipeline is used."""
@@ -292,6 +319,11 @@ class LocalLLMClient:
         Generate code using local HuggingFace model or remote inference API.
         If OMI_REMOTE_INFERENCE_URL is set, calls that URL (computing engine = remote).
         """
+        budget_err = self._consume_call_budget()
+        if budget_err:
+            logger.warning("%s", budget_err)
+            return budget_err
+
         # 0) Vertex Endpoint (fine-tuned Qwen) if configured
         try:
             from .vertex_endpoint_inference import (
@@ -303,7 +335,9 @@ class LocalLLMClient:
                     formatted = f"### Problem:\n{prompt}\n\n### Solution:\n"
                 else:
                     formatted = prompt
-                return predict_vertex_endpoint(formatted, temperature=temperature)
+                out = predict_vertex_endpoint(formatted, temperature=temperature)
+                self._update_rate_limit_flag(out)
+                return out
         except Exception as e:
             logger.warning("Vertex endpoint inference check failed: %s", e)
 
@@ -311,13 +345,18 @@ class LocalLLMClient:
             from .vertex_inference import (
                 is_vertex_configured,
                 generate_vertex,
+                consume_vertex_rate_limit_signal,
             )
             if is_vertex_configured():
                 if "MathCoder" in (self.model_name or ""):
                     formatted = f"### Problem:\n{prompt}\n\n### Solution:\n"
                 else:
                     formatted = prompt
-                return generate_vertex(formatted, temperature=temperature)
+                out = generate_vertex(formatted, temperature=temperature)
+                if consume_vertex_rate_limit_signal():
+                    self.last_rate_limited = True
+                self._update_rate_limit_flag(out)
+                return out
             _log_vertex_skipped_once()
         except Exception as e:
             logger.warning("Vertex inference check failed: %s", e)
@@ -333,7 +372,9 @@ class LocalLLMClient:
                     formatted = f"### Problem:\n{prompt}\n\n### Solution:\n"
                 else:
                     formatted = prompt
-                return generate_remote(formatted)
+                out = generate_remote(formatted)
+                self._update_rate_limit_flag(out)
+                return out
         except Exception as e:
             logger.warning("Remote inference check failed, using local: %s", e)
 
@@ -670,6 +711,16 @@ class Solver:
         Extracts code from markdown blocks if present and validates syntax.
         """
         code = response.strip()
+
+        # Normalize problematic Unicode whitespace that often appears in model output
+        # and breaks Python parsing (e.g., NBSP U+00A0, BOM, zero-width spaces).
+        code = (
+            code.replace("\u00A0", " ")
+            .replace("\u2007", " ")
+            .replace("\u202F", " ")
+            .replace("\u200B", "")
+            .replace("\uFEFF", "")
+        )
 
         # Fix: Handle escaped strings (\\n -> \n)
         if "\\n" in code and code.count("\\n") > code.count("\n"):

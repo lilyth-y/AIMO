@@ -291,6 +291,11 @@ class PipelineOrchestrator:
 
             ids = make_ids(problem_text)
             request_id = ids.get("run_id", "unknown")
+            try:
+                if hasattr(self.solver, "llm") and hasattr(self.solver.llm, "reset_call_budget"):
+                    self.solver.llm.reset_call_budget()
+            except Exception as e:
+                logger.debug(f"LLM call budget reset skipped: {e}")
 
 
 
@@ -641,52 +646,60 @@ class PipelineOrchestrator:
 
 
             last_was_timeout = False
+            structured_used = False
 
             # Phase 2.1: proof 또는 고복잡도일 때 multi-agent 선시도 (설정 시)
             use_multi_agent_early = getattr(config, "USE_MULTI_AGENT_EARLY", False)
             multi_agent_early_threshold = getattr(config, "MULTI_AGENT_EARLY_COMPLEXITY_THRESHOLD", 20)
+            bypass_multi_agent_on_rate_limit = os.getenv("AIMO_BYPASS_MULTI_AGENT_ON_RATE_LIMIT", "1") == "1"
+            rate_limited_in_this_solve = bool(
+                getattr(getattr(self.solver, "llm", None), "last_rate_limited", False)
+            )
             if use_multi_agent_early and (problem_type == "proof" or (complexity_score or 0) >= multi_agent_early_threshold):
-                if self.multi_agent is None:
-                    self.multi_agent = MultiAgentReasoner(self.solver, self.executor)
-                try:
-                    multi_result = self.multi_agent.solve_with_multi_agent(problem_text)
-                    final_answer = normalize_multi_agent_answer(multi_result.get("final_answer"))
-                    if final_answer:
-                        logger.info(f"MULTI-AGENT (early) Success! Answer: {final_answer}")
-                        log_result({
-                            "problem_preview": problem_text[:80],
-                            "strategy": "multi_agent_early",
-                            "structured_used": True,
-                            "complexity_score": complexity_score,
-                            "extracted_answer": final_answer,
-                            "execution_result": "multi_agent_result",
-                            **solve_result_verification_fields(variables, True),
-                            "attempt": 1,
-                            "mismatch": False,
-                            "mismatch_type": None,
-                            "resource_usage": None,
-                            "strategy_features": feat,
-                            "cache_hits": 0,
-                            **ids,
-                            "strategy_order": ["multi_agent_early"],
-                        }, path=config.LOG_PATH)
-                        return {
-                            "answer": final_answer,
-                            "method": "multi_agent",
-                            "code": None,
-                            "execution_result": "multi_agent_result",
-                            "structured_used": True,
-                            "extracted_answer": final_answer,
-                            **solve_result_verification_fields(variables, True),
-                            "mismatch": False,
-                            "mismatch_type": None,
-                            "resource_usage": None,
-                            "strategy_features": feat,
-                            "cache_hits": 0,
-                            **ids,
-                        }
-                except Exception as e:
-                    logger.debug(f"Multi-agent early attempt failed: {e}")
+                if bypass_multi_agent_on_rate_limit and rate_limited_in_this_solve:
+                    logger.info("Skipping early multi-agent due to prior rate-limit signal in this solve.")
+                else:
+                    if self.multi_agent is None:
+                        self.multi_agent = MultiAgentReasoner(self.solver, self.executor)
+                    try:
+                        multi_result = self.multi_agent.solve_with_multi_agent(problem_text)
+                        final_answer = normalize_multi_agent_answer(multi_result.get("final_answer"))
+                        if final_answer:
+                            logger.info(f"MULTI-AGENT (early) Success! Answer: {final_answer}")
+                            log_result({
+                                "problem_preview": problem_text[:80],
+                                "strategy": "multi_agent_early",
+                                "structured_used": True,
+                                "complexity_score": complexity_score,
+                                "extracted_answer": final_answer,
+                                "execution_result": "multi_agent_result",
+                                **solve_result_verification_fields(variables, True),
+                                "attempt": 1,
+                                "mismatch": False,
+                                "mismatch_type": None,
+                                "resource_usage": None,
+                                "strategy_features": feat,
+                                "cache_hits": 0,
+                                **ids,
+                                "strategy_order": ["multi_agent_early"],
+                            }, path=config.LOG_PATH)
+                            return {
+                                "answer": final_answer,
+                                "method": "multi_agent",
+                                "code": None,
+                                "execution_result": "multi_agent_result",
+                                "structured_used": True,
+                                "extracted_answer": final_answer,
+                                **solve_result_verification_fields(variables, True),
+                                "mismatch": False,
+                                "mismatch_type": None,
+                                "resource_usage": None,
+                                "strategy_features": feat,
+                                "cache_hits": 0,
+                                **ids,
+                            }
+                    except Exception as e:
+                        logger.debug(f"Multi-agent early attempt failed: {e}")
 
             for attempt, strategy in enumerate(strategies, 1):
 
@@ -1892,6 +1905,27 @@ class PipelineOrchestrator:
 
 
             # Try multi-agent reasoning as last resort
+            if (
+                bypass_multi_agent_on_rate_limit
+                and bool(getattr(getattr(self.solver, "llm", None), "last_rate_limited", False))
+            ):
+                logger.warning("Skipping multi-agent fallback due to rate-limit signal (429/RESOURCE_EXHAUSTED).")
+                return {
+                    'answer': None,
+                    'method': 'all_failed_rate_limited',
+                    'code': None,
+                    'execution_result': 'ERROR: skipped multi-agent due to rate limiting',
+                    'structured_used': structured_used,
+                    'extracted_answer': None,
+                    **solve_result_verification_fields(variables, False),
+                    'mismatch': False,
+                    'mismatch_type': None,
+                    'reconcile_details': None,
+                    'resource_usage': None,
+                    'strategy_features': feat,
+                    'cache_hits': 0,
+                    **ids,
+                }
 
 
 
