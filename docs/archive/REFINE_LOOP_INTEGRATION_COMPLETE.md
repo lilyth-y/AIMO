@@ -10,13 +10,16 @@
 ### 1. RefineLoop 모듈 통합
 
 #### Import 추가
+
 - ✅ `from .refine_loop import RefineLoop, create_refine_loop` 추가
 
 #### 인스턴스 생성
+
 - ✅ `__init__`에서 `self.refine_loop = create_refine_loop(max_iterations=1, enable_loop=True)` 생성
 - ✅ 전략당 1회 재시도로 설정
 
 #### 기존 로직 교체
+
 - ✅ 기존 인라인 refine 로직 (약 1668-1978 라인) 제거
 - ✅ `RefineLoop.refine_attempt()` 메서드 사용으로 교체
 - ✅ 코드 중복 제거 및 모듈화 완료
@@ -28,11 +31,13 @@
 ### 코드 품질 향상
 
 **이전**:
+
 - 약 300+ 라인의 인라인 refine 로직
 - 코드 중복
 - 유지보수 어려움
 
 **개선 후**:
+
 - RefineLoop 모듈 재사용
 - 약 50 라인으로 축소
 - 명확한 책임 분리
@@ -86,6 +91,7 @@ if self.refine_loop.should_refine(...):
 ### 2. 일관된 결과 형식
 
 RefineLoop 모듈이 일관된 딕셔너리 형식으로 결과를 반환:
+
 - `answer`: 최종 답변
 - `method`: 사용된 방법
 - `code`: 생성된 코드

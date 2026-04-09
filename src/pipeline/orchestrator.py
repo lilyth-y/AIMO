@@ -986,6 +986,9 @@ class PipelineOrchestrator:
                         logger.warning("Triggering Fallback Strategy...")
                         continue
 
+                # Keep raw execution output for XAI/dashboard (may include debug prints or tracebacks).
+                raw_execution_output = result
+
 
 
 
@@ -1223,6 +1226,7 @@ class PipelineOrchestrator:
 
 
                         'problem_preview': problem_text[:80],
+                        'problem_text': problem_text,
 
 
 
@@ -1248,6 +1252,9 @@ class PipelineOrchestrator:
 
 
                         'execution_result': cleaned_result,
+                        'execution_output_raw': raw_execution_output,
+                        'generated_code': code,
+                        'llm_reasoning': self.solver.last_reasoning,
 
 
 
@@ -1610,6 +1617,7 @@ class PipelineOrchestrator:
 
 
                             'problem_preview': problem_text[:80],
+                            'problem_text': problem_text,
 
 
 
@@ -1635,6 +1643,9 @@ class PipelineOrchestrator:
 
 
                             'execution_result': refine_out.strip(),
+                            'execution_output_raw': refine_out.strip(),
+                            'generated_code': refine_code,
+                            'llm_reasoning': self.solver.last_reasoning,
 
 
 
@@ -2107,6 +2118,7 @@ class PipelineOrchestrator:
 
 
                 'problem_preview': problem_text[:80],
+                'problem_text': problem_text,
 
 
 
@@ -2132,6 +2144,9 @@ class PipelineOrchestrator:
 
 
                 'execution_result': 'All strategies failed',
+                'execution_output_raw': None,
+                'generated_code': None,
+                'llm_reasoning': self.solver.last_reasoning,
 
 
 

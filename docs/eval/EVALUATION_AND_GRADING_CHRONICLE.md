@@ -9,6 +9,7 @@
 - **엔드포인트**: `google.cloud.aiplatform.Endpoint.predict` 로 프롬프트·생성만 전달; strict `<ANS>` 검증은 클라이언트(`ans_format_guard`)에서 수행.
 - **503 / 지연**: `predict` 타임아웃이 짧거나 `None`이면 gRPC 기본(~60s)에 걸려 끊기는 경우가 있어, eval 스크립트는 `_effective_predict_timeout` 으로 **최소**(기본 300s, `VERTEX_PREDICT_TIMEOUT_MIN`)·**바닥/상한**(기본 600s, `VERTEX_PREDICT_TIMEOUT_FLOOR` / `VERTEX_PREDICT_TIMEOUT_MAX`)을 맞춘다. 일시 오류는 클라이언트 재시도·행 단위 `predict_progress`로 추적한다.
 - **비용**: L4 등 가격은 리전·할인·할당량에 따라 변동; **월 $10 수준·가끔 사용**은 소규모 `n-problems`·낮은 동시성·엔드포인트 미니 머신 구성으로 맞추는 식으로 설계. **실제 청구는 GCP 콘솔 Billing**에서 확인하는 것이 정확하다.
+
 - **7B 전환**: 서빙/설정 문서 및 기본 모델 ID·스모크 eval JSONL 이름 등은 저장소 내 Vertex 관련 문서(`docs/vertex/` 등)와 스크립트 주석에 맞춰 갱신하는 흐름이 있었다.
 
 ---

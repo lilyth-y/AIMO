@@ -68,7 +68,7 @@ flowchart LR
 | **2. 문제 해석**    | 분류·복잡도·라우팅    | Stage1, `classify_problem`, `assess_complexity`, `CalculationRouter`, `StrategyBandit` |
 | **3. 풀이 작성**    | 구조화 추론·전략 선택  | `reasoning_utils` 구조화 프롬프트, 하이브리드/분해 경로                                                |
 | **4. 코드 작성·실행** | 코드 생성·실행·자기수정 | `generate_code`, Stage4, `attempt_code_fix` 등                                          |
-| **5. 평가·검증**    | 정확도·형식·기호 검산  | Stage5, `AnswerExtractor`, 오프라인 `eval_*`, `ans_format_guard`(형식 게이트)                   |
+| **5. 평가·검증**    | 정확도·형식·기호 검산  | Stage5, `AnswerExtractor`, 오프라인 `eval_`*, `ans_format_guard`(형식 게이트)                   |
 
 
 위 표는 **개념 정렬**용이고, 실제 호출 순서는 위 절 mermaid(라우팅·폴백·Self-Correction)처럼 **한 줄로만 흐르지 않는다**.
@@ -225,12 +225,13 @@ Stage1·복잡도·기하 경로·Self-Correction·multi-agent 진입 시점 등
 
 | 티어                  | 목적                                                   | 대표 수단                                                                                                                                                           | 비고                          |
 | ------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| **0 — 실행기**         | 서브프로세스 실행·출력 수집                                      | `tests/test_real_inference_path.py` 의 `test_step0_*`, `CodeExecutor`                                                                                            | LLM 없음                      |
+| **0 — 실행기**         | 서브프로세스 실행·출력 수집                                      | `tests/test_real_inference_path.py` 의 `test_step0_`*, `CodeExecutor`                                                                                            | LLM 없음                      |
 | **1 — 결정론적 Mock**   | `solve_problem` dict 계약, 라우팅 예외 없이 진행                | `AIMO_FAST_TEST=1`, `AIMO_MOCK_GENERATED_CODE` (기본 `print(0)`), `pytest -m structure`                                                                           | **문제를 풀지 않음**; 정확도 지표에 부적합  |
 | **2 — 로컬 HF 스모크**   | `LocalLLMClient` → `Solver` → (가능하면) 실행까지 **실추론 경로** | `RUN_REAL_INFERENCE=1`, 소형 모델(예: `sshleifer/tiny-gpt2`), `OMI_QUANTIZATION=none`, `AIMO_LLM_DTYPE=float32`                                                      | 네트워크/캐시 필요; 출력 품질은 평가 대상 아님 |
 | **3 — 오프라인 정확도·층화** | 난이도·유형·소스별 정확도, A/B                                  | `examples/run_numina_evaluation.py`, `EvaluationMetrics` (`by_difficulty`, `by_problem_type`, `by_question_type`), `examples/ab_eval_1000.py` + McNemar(전체·유형별) | 실제 모델·Vertex·엔드포인트          |
 
-**모델 로드 횟수**: `run_numina_evaluation.py` / `ab_eval_1000.py` 는 기본 **`AIMO_EVAL_IN_PROCESS=1`** (미설정과 동일)이라 **프로세스당 orchestrator 하나**로 끝까지 돌리고, HuggingFace 가중치는 **한 번만** 올린다. 문제마다 자식 프로세스를 띄우며 매번 다시 로드하는 동작은 **`AIMO_EVAL_IN_PROCESS=0`** 일 때만 켜진다(로컬 대형 모델에는 비권장).
+
+**모델 로드 횟수**: `run_numina_evaluation.py` / `ab_eval_1000.py` 는 기본 `**AIMO_EVAL_IN_PROCESS=1`** (미설정과 동일)이라 **프로세스당 orchestrator 하나**로 끝까지 돌리고, HuggingFace 가중치는 **한 번만** 올린다. 문제마다 자식 프로세스를 띄우며 매번 다시 로드하는 동작은 `**AIMO_EVAL_IN_PROCESS=0`** 일 때만 켜진다(로컬 대형 모델에는 비권장).
 
 **양자화·모델 env 정렬**: `LocalLLMClient`는 `MATHCODEORCHESTRATOR_QUANTIZATION` → `**OMI_QUANTIZATION` / `AIMO_QUANTIZATION`** → 설정 기본값 순으로 읽는다. 소형 모델 스모크 시 `none` + `AIMO_LLM_DTYPE=float32` 조합이 안전하다.
 
@@ -242,22 +243,24 @@ Stage1·복잡도·기하 경로·Self-Correction·multi-agent 진입 시점 등
 
 아래는 **저장소 커밋·문서·디렉터리 구조**를 바탕으로 한 **논리적 15주 타임라인**이다. 실제 일정과 1:1로 대응하지 않을 수 있으며, 초기에는 커밋이 구간별로 응축되어 있다.
 
-| 주차 | 시기(대략) | 변천사 |
-| --- | --- | --- |
-| **1주** | 기점 | 저장소·브랜치·Cursor 워크트리 등 **개발 환경** 정비; 빈 커밋으로 워크트리 생성 허용 (`2025-12-18` 근거). |
-| **2주** | — | **협업/브랜칭** 흐름에 맞춘 도구 설정(워크트리 지원 등, `2026-01-15`). |
-| **3주** | — | `.gitignore`로 **캐시·모델 가중치** 등 대용량 산출물 제외, 재현 가능한 루트만 유지 (`2026-01-26`). |
-| **4주** | — | **오프라인 평가 프레임워크** 도입: `src/evaluation`, 지표·설정 계약 정리; IMO/퍼즐류 문제 처리 경로 보강 (`2026-01-26`). |
-| **5주** | — | 파이프라인과 평가를 잇는 **스크립트·예제**(`examples/`, `run_*evaluation.py`) 정착; “구조 테스트 vs 정확도” 구분의 초석. |
-| **6주** | — | **5-Stage 파이프라인** 개념을 문서화(`docs/AIMO3/`): Stage1 라벨링, Stage3 Calculation Router(Simulator/Theoretician/Hybrid), Stage5 검증. |
-| **7주** | — | **Orchestrator 중심**으로 `solve_problem` 계약 고정: 도메인·변수·복잡도 → 라우팅 → 코드 생성·실행 → 답 추출. |
-| **8주** | — | **Numina / 로컬 HF** 경로: `LocalLLMClient`, 양자화·dtype·토큰 상한 등 실행 환경 변수 정렬; 평가 러너에서 **프로세스 내 단일 로드**(`AIMO_EVAL_IN_PROCESS`) 패턴. |
-| **9주** | — | **StrategyBandit·폴백**: 전략 순서 재조정, 한 전략 실패 시 다음 전략; Self-Correction(코드 수정 1회)과 병행. |
-| **10주** | — | **구조화 추론**(`reasoning_utils`): FACTS/GOAL/PLAN/DERIVATION/CHECK/ANS; 복잡도·길이 임계로 구조화 프롬프트 선택. |
-| **11주** | — | **분해·하이브리드**: `should_decompose`, `ProblemDecomposer`, `HybridReasoningEngine`와 복잡도 임계 정책 연계. |
-| **12주** | `2026-03-09` | **대시보드(XAI)** 와 **Qwen2.5-Math-1.5B** 등 모델 환경 정리; 결과 시각화·실험 추적 층 추가. |
-| **13주** | `2026-03-17` | **대규모 파이프라인 패치**: Self-correction 시도·답 추출·멀티에이전트 조기 진입·기하 핸들러·Stage1 변수; `torch_dtype`→`dtype`, 생성 설정 정리; Kaggle OTLP는 플래그 시에만; **ZERO_ACCURACY_DEBUG** 등 데이터 형식·정답 판정 문서화. |
-| **14주** | — | **검증 티어·품질 게이트** 명시: `ans_format_guard`, `eval_hf_local_quality`, McNemar A/B(`ab_eval_1000` 등); 문서·스크립트를 `docs/run-eval/`, `docs/vertex/`로 정리(`docs/CLEANUP_2026.md` 흐름). |
+
+| 주차      | 시기(대략)       | 변천사                                                                                                                                                                               |
+| ------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1주**  | 기점           | 저장소·브랜치·Cursor 워크트리 등 **개발 환경** 정비; 빈 커밋으로 워크트리 생성 허용 (`2025-12-18` 근거).                                                                                                          |
+| **2주**  | —            | **협업/브랜칭** 흐름에 맞춘 도구 설정(워크트리 지원 등, `2026-01-15`).                                                                                                                                 |
+| **3주**  | —            | `.gitignore`로 **캐시·모델 가중치** 등 대용량 산출물 제외, 재현 가능한 루트만 유지 (`2026-01-26`).                                                                                                           |
+| **4주**  | —            | **오프라인 평가 프레임워크** 도입: `src/evaluation`, 지표·설정 계약 정리; IMO/퍼즐류 문제 처리 경로 보강 (`2026-01-26`).                                                                                          |
+| **5주**  | —            | 파이프라인과 평가를 잇는 **스크립트·예제**(`examples/`, `run_*evaluation.py`) 정착; “구조 테스트 vs 정확도” 구분의 초석.                                                                                          |
+| **6주**  | —            | **5-Stage 파이프라인** 개념을 문서화(`docs/AIMO3/`): Stage1 라벨링, Stage3 Calculation Router(Simulator/Theoretician/Hybrid), Stage5 검증.                                                        |
+| **7주**  | —            | **Orchestrator 중심**으로 `solve_problem` 계약 고정: 도메인·변수·복잡도 → 라우팅 → 코드 생성·실행 → 답 추출.                                                                                                  |
+| **8주**  | —            | **Numina / 로컬 HF** 경로: `LocalLLMClient`, 양자화·dtype·토큰 상한 등 실행 환경 변수 정렬; 평가 러너에서 **프로세스 내 단일 로드**(`AIMO_EVAL_IN_PROCESS`) 패턴.                                                      |
+| **9주**  | —            | **StrategyBandit·폴백**: 전략 순서 재조정, 한 전략 실패 시 다음 전략; Self-Correction(코드 수정 1회)과 병행.                                                                                                 |
+| **10주** | —            | **구조화 추론**(`reasoning_utils`): FACTS/GOAL/PLAN/DERIVATION/CHECK/ANS; 복잡도·길이 임계로 구조화 프롬프트 선택.                                                                                      |
+| **11주** | —            | **분해·하이브리드**: `should_decompose`, `ProblemDecomposer`, `HybridReasoningEngine`와 복잡도 임계 정책 연계.                                                                                     |
+| **12주** | `2026-03-09` | **대시보드(XAI)** 와 **Qwen2.5-Math-1.5B** 등 모델 환경 정리; 결과 시각화·실험 추적 층 추가.                                                                                                              |
+| **13주** | `2026-03-17` | **대규모 파이프라인 패치**: Self-correction 시도·답 추출·멀티에이전트 조기 진입·기하 핸들러·Stage1 변수; `torch_dtype`→`dtype`, 생성 설정 정리; Kaggle OTLP는 플래그 시에만; **ZERO_ACCURACY_DEBUG** 등 데이터 형식·정답 판정 문서화.       |
+| **14주** | —            | **검증 티어·품질 게이트** 명시: `ans_format_guard`, `eval_hf_local_quality`, McNemar A/B(`ab_eval_1000` 등); 문서·스크립트를 `docs/run-eval/`, `docs/vertex/`로 정리(`docs/CLEANUP_2026.md` 흐름).        |
 | **15주** | `2026-03-29` | **Vertex / Cloud Shell**: `vertex_inference.py`, `quick_vertex_test.py`, `requirements-vertex.txt`, Numina 밸런스 JSON; **MultiAgentReasoner**가 orchestrator와 동일한 executor 시그니처로 정렬. |
 
-**한 줄 요약**: 1~5주차는 **환경·평가·문제 유형**; 6~11주차는 **5-Stage·라우팅·추론·분해**; 12~15주차는 **관측 가능성(대시보드)·운영 안정화(Kaggle/Vertex)·문서·클라우드 스모크**로 수렴한다.
+
+**한 줄 요약**: 1~~5주차는 **환경·평가·문제 유형**; 6~~11주차는 **5-Stage·라우팅·추론·분해**; 12~15주차는 **관측 가능성(대시보드)·운영 안정화(Kaggle/Vertex)·문서·클라우드 스모크**로 수렴한다.

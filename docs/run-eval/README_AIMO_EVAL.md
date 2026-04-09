@@ -1,6 +1,6 @@
 # AIMO Progress Prize 참조 문제 평가 (개요)
 
-AIMO Progress Prize 3 **참조(reference) 문제 5개**를 다루는 문서이다. 로컬 경로·도커 명은 현재 레포의 [`compose.yml`](../../compose.yml)·[`entrypoint.sh`](../../entrypoint.sh) 와 맞춘다.
+AIMO Progress Prize 3 **참조(reference) 문제 5개**를 다루는 문서이다. 로컬 경로·도커 명은 현재 레포의 `[compose.yml](../../compose.yml)`·`[entrypoint.sh](../../entrypoint.sh)` 와 맞춘다.
 
 ## 문제 목록 (reference.csv 기준)
 
@@ -16,7 +16,7 @@ AIMO Progress Prize 3 **참조(reference) 문제 5개**를 다루는 문서이�
 
 ### 일반 평가 (Numina 균형 세트 등)
 
-모델·양자화는 [`README_MODELS.md`](README_MODELS.md) 와 `src/pipeline/settings.py` 기준이다.
+모델·양자화는 `[README_MODELS.md](README_MODELS.md)` 와 `src/pipeline/settings.py` 기준이다.
 
 ```powershell
 python examples/run_numina_evaluation.py
@@ -24,7 +24,7 @@ python examples/run_numina_evaluation.py
 
 ### 참조 5문항 전용 스크립트와 Docker
 
-프로젝트 루트의 [`run_aimo_evaluation.py`](../../run_aimo_evaluation.py)가 JSONL(`archive/legacy/AIMO_core/data/aimo_problems.jsonl`, 또는 `AIMO_REFERENCE_JSONL`)을 읽어 평가한다. `entrypoint.sh`의 `aimo` 모드가 이 파일을 호출한다.
+프로젝트 루트의 `[run_aimo_evaluation.py](../../run_aimo_evaluation.py)`가 JSONL(`archive/legacy/AIMO_core/data/aimo_problems.jsonl`, 또는 `AIMO_REFERENCE_JSONL`)을 읽어 평가한다. `entrypoint.sh`의 `aimo` 모드가 이 파일을 호출한다.
 
 ### 도커 실행 (FAST_TEST 모드)
 
@@ -77,7 +77,7 @@ docker run --gpus all --rm `
 2. IMO 특화 프롬프트·라우팅
 3. 다중 후보·투표 (`OMI_USE_VOTING` 등, `settings.py`)
 4. 외부 도구(SymPy 등) 연동
-5. Self-refine (`OMI_REFINE_*`, `refine_loop.py`)
+5. Self-refine (`OMI_REFINE_`*, `refine_loop.py`)
 
 ## 데이터 소스
 
@@ -98,3 +98,4 @@ id,answer
 - 답 범위: **0–99999** (5자리 정수)
 - 형식: `submission.csv` 또는 `submission.parquet`
 - 평가: 정확 일치
+

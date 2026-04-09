@@ -61,6 +61,7 @@ MathCodeOrchestrator/
 ### 소스 코드 (src/)
 
 #### pipeline/
+
 - **orchestrator.py**: 전체 파이프라인을 조율하는 메인 오케스트레이터
 - **solver.py**: LLM을 사용한 코드 생성 및 문제 해결
 - **stage1_labeling.py**: 문제 분류 및 라벨링
@@ -70,6 +71,7 @@ MathCodeOrchestrator/
 - **stage5_verification.py**: 답변 검증
 
 #### evaluation/
+
 - **evaluation_utils.py**: 평가 메트릭, 결과 저장, 답변 검증
 - **config.py**: 평가 설정 및 경로 관리
 
@@ -95,21 +97,25 @@ MathCodeOrchestrator/
 ## 사용 방법
 
 ### 빠른 평가 실행
+
 ```bash
 python examples/quick_eval.py
 ```
 
 ### AIME 평가 실행
+
 ```bash
 python examples/run_aime_evaluation.py
 ```
 
 ### NuminaMath 평가 실행
+
 ```bash
 python examples/run_numina_evaluation.py
 ```
 
 ### 테스트 실행
+
 ```bash
 python -m pytest tests/
 # 또는
@@ -135,3 +141,4 @@ python tests/test_evaluation_utils.py
 - `logs/`와 `results/` 디렉토리는 `.gitignore`에 포함되어 있습니다.
 - 데이터 파일은 Git에 포함되지 않을 수 있습니다 (용량 문제).
 - 모델 파일은 `.cache/`에 저장되며 Git에 포함되지 않습니다.
+

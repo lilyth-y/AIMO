@@ -10,12 +10,14 @@
 ### 1. SymPy 기반 정규화 강화
 
 **개선 사항**:
+
 - ✅ VerificationRouter의 고급 비교 로직 활용
 - ✅ 다중 단순화 방법 시도 (simplify, factor, expand, trigsimp, ratsimp, cancel)
 - ✅ 표현식 정규화 후 비교
 - ✅ 잘못된 불일치 감소
 
 **구현**:
+
 ```python
 def _compare_with_normalization(self, a, b):
     # VerificationRouter의 고급 비교 사용
@@ -25,6 +27,7 @@ def _compare_with_normalization(self, a, b):
 ### 2. 불일치 분류 개선
 
 **개선 사항**:
+
 - ✅ 더 정확한 불일치 분류
   - MISMATCH_ARITHMETIC: 숫자 불일치 (산술 오류)
   - MISMATCH_LOGIC: 구조/로직 불일치
@@ -35,6 +38,7 @@ def _compare_with_normalization(self, a, b):
 - ✅ SymPy 표현식 불일치 분류
 
 **구현**:
+
 ```python
 def _classify_mismatch(self, parsed_ex, parsed_exec, ...):
     # 1. 숫자 불일치 (산술 오류)
@@ -97,11 +101,13 @@ def _classify_mismatch(self, parsed_ex, parsed_exec, ...):
 ### 불일치 분류 정확도 향상
 
 **이전**:
+
 - 기본적인 숫자/로직 분류
 - 부동소수점 오차 미고려
 - 제한적인 SymPy 정규화
 
 **개선 후**:
+
 - 정확한 불일치 분류 (산술 vs 로직)
 - 부동소수점 오차 고려
 - 강화된 SymPy 정규화
@@ -162,6 +168,7 @@ if isinstance(parsed_ex, (list, tuple)) and isinstance(parsed_exec, (list, tuple
 추론-답변 조정 개선이 완료되었습니다. P0 작업이 모두 완료되었습니다!
 
 **P0 작업 완료 상태**:
+
 1. ✅ **고급 검증 모듈 강화** - 완료
 2. ✅ **Self-Refine Loop 통합** - 완료
 3. ✅ **실행 리소스 제한** - 완료

@@ -78,16 +78,28 @@ python examples/run_aime_evaluation.py
 python examples/run_numina_evaluation.py
 ```
 
+### 5. (권장) 쉬운 문제만 + 저렴하게 실행 (Windows)
+
+비용이 과하게 나오는 걸 방지하기 위해, 기본 실행 경로는 **easy-only**로 고정하는 것을 권장합니다.
+
+```powershell
+.\scripts\run_numina_easy_cheap.ps1
+```
+
 ## 📚 주요 기능
 
 ### Math Orchestration
+
 수학 문제를 체계적으로 분석하고 최적의 해결 전략을 선택합니다:
+
 - 문제 분류 및 특징 추출
 - 전략 라우팅 (Simulator/Theoretician/Hybrid)
 - 다단계 추론 파이프라인
 
 ### Code Interpreter
+
 생성된 Python 코드를 안전하게 실행하여 정확한 답을 도출합니다:
+
 - 코드 생성 및 검증
 - 샌드박스 실행
 - 결과 추출 및 정규화
@@ -116,43 +128,49 @@ python tests/test_real_imo_puzzle.py
 ## 📝 프로젝트 구성 요소
 
 ### 메인 소스 (src/)
+
 - `pipeline/` - 5-Stage 추론 파이프라인
 - `evaluation/` - 평가 유틸리티 및 메트릭
 - `data/` - 데이터 로더 (NuminaMath, AIME)
 - `kaggle/` - Kaggle 평가 게이트웨이
 
 ### 예제 (examples/)
+
 - `quick_eval.py` - 빠른 평가 (5개 문제)
 - `run_aime_evaluation.py` - AIME 평가
 - `run_numina_evaluation.py` - NuminaMath 평가
 
 ### 문서 (docs/)
+
 - `README.md` - 문서 인덱스 (폴더별 정리)
 - `getting-started/` - 소개 · `structure/` - 구조 · `run-eval/` - 실행·평가
 - `finetuning-resources/` - 파인튜닝·재원 · `guides/` - 가이드 · `todo/` - 할 일
 - `AIMO3/` - 대회 리포트 · `archive/` - 과거 문서
 
 ### 아카이브 (archive/)
+
 - `legacy/AIMO_core/` - 초기 코어 프로젝트 (레거시)
 
 ## ⚙️ 환경 변수
 
-단일 기준은 [`src/pipeline/settings.py`](src/pipeline/settings.py)입니다. 아래는 자주 쓰는 항목만 요약합니다.
+단일 기준은 `[src/pipeline/settings.py](src/pipeline/settings.py)`입니다. 아래는 자주 쓰는 항목만 요약합니다.
 
-| 변수 | 의미 | 기본·비고 |
-|------|------|-----------|
-| `OMI_MODEL` | Hugging Face `repo_id` 또는 로컬 모델 경로 | 없으면 `AIMO_MODEL` → 기본 `Qwen/Qwen2.5-Math-7B-Instruct` |
-| `AIMO_MODEL` | `OMI_MODEL` 폴백 | 위와 동일 체인 |
-| `OMI_QUANTIZATION` | `4bit` / `8bit` / `none` | 없으면 `AIMO_QUANTIZATION` → 기본 `8bit` |
-| `AIMO_QUANTIZATION` | 양자화 폴백 | |
-| `OMI_REFINE_MAX_ITERATIONS` | Refine 루프 최대 반복 | 기본 `3` |
-| `OMI_REFINE_ENABLED` | Refine 루프 on/off | 기본 `true` |
-| `OMI_EXECUTOR_TIMEOUT` | 코드 실행 타임아웃(초) | 기본 `5.0` |
-| `AIMO_EXECUTOR_MEMORY_MB` | 실행 메모리 상한(MB), `0`이면 미사용 | 기본 `0` |
-| `AIMO_FAST_TEST` | `1`이면 빠른 테스트 모드 | 기본 `0` |
-| `OMI_LOG_PATH` | 평가 로그 JSONL 경로 | 기본 `logs/eval_log.jsonl` |
-| `HF_HOME` | Hugging Face 캐시 루트 | 선택 |
-| `TRANSFORMERS_CACHE` | Transformers 캐시 | 선택 |
+
+| 변수                          | 의미                                 | 기본·비고                                                 |
+| --------------------------- | ---------------------------------- | ----------------------------------------------------- |
+| `OMI_MODEL`                 | Hugging Face `repo_id` 또는 로컬 모델 경로 | 없으면 `AIMO_MODEL` → 기본 `Qwen/Qwen2.5-Math-7B-Instruct` |
+| `AIMO_MODEL`                | `OMI_MODEL` 폴백                     | 위와 동일 체인                                              |
+| `OMI_QUANTIZATION`          | `4bit` / `8bit` / `none`           | 없으면 `AIMO_QUANTIZATION` → 기본 `8bit`                   |
+| `AIMO_QUANTIZATION`         | 양자화 폴백                             |                                                       |
+| `OMI_REFINE_MAX_ITERATIONS` | Refine 루프 최대 반복                    | 기본 `3`                                                |
+| `OMI_REFINE_ENABLED`        | Refine 루프 on/off                   | 기본 `true`                                             |
+| `OMI_EXECUTOR_TIMEOUT`      | 코드 실행 타임아웃(초)                      | 기본 `5.0`                                              |
+| `AIMO_EXECUTOR_MEMORY_MB`   | 실행 메모리 상한(MB), `0`이면 미사용           | 기본 `0`                                                |
+| `AIMO_FAST_TEST`            | `1`이면 빠른 테스트 모드                    | 기본 `0`                                                |
+| `OMI_LOG_PATH`              | 평가 로그 JSONL 경로                     | 기본 `logs/eval_log.jsonl`                              |
+| `HF_HOME`                   | Hugging Face 캐시 루트                 | 선택                                                    |
+| `TRANSFORMERS_CACHE`        | Transformers 캐시                    | 선택                                                    |
+
 
 ## 📊 평가 데이터셋
 

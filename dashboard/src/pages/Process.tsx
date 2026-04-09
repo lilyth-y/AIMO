@@ -13,10 +13,22 @@ interface Problem {
   question_type: string
 }
 
+interface EvalStepParams {
+  iteration?: number
+  llm_response?: string
+  generated_code?: string | null
+  execution_output_raw?: string | null
+  execution_result?: string | null
+  verified?: boolean
+  mismatch?: boolean
+  mismatch_type?: string | null
+  reconcile_details?: string | null
+}
+
 interface EvalData {
   query: string;
   response: string;
-  reasoning_steps: { step: string; params: any }[];
+  reasoning_steps: { step: string; params: EvalStepParams }[];
   result: { output: string | null; error: string | null; traceback: string | null };
   tools: string[];
   type: string;
@@ -445,6 +457,28 @@ export default function Process() {
                               <Md>{step.params.llm_response}</Md>
                             </div>
                           )}
+                          {step.params?.generated_code && String(step.params.generated_code).trim() && (
+                            <div className="space-y-2">
+                              <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Generated code (this attempt)</div>
+                              <pre className="text-[12px] font-mono text-emerald-200/90 whitespace-pre-wrap break-words overflow-x-auto bg-[#0d1117] p-4 rounded-xl border border-emerald-500/15 custom-scrollbar leading-relaxed">
+                                {String(step.params.generated_code)}
+                              </pre>
+                            </div>
+                          )}
+                          {step.params?.execution_output_raw && String(step.params.execution_output_raw).trim() && (
+                            <div className="space-y-2">
+                              <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">Runtime output (raw)</div>
+                              <pre className="text-[11px] font-mono text-slate-300/90 whitespace-pre-wrap break-words overflow-x-auto bg-[#0d1117] p-4 rounded-xl border border-white/10 custom-scrollbar leading-relaxed">
+                                {String(step.params.execution_output_raw)}
+                              </pre>
+                            </div>
+                          )}
+                          {step.params?.reconcile_details && String(step.params.reconcile_details).trim() && (
+                            <p className="text-[11px] text-slate-500 leading-relaxed border-t border-white/5 pt-3">
+                              <span className="text-slate-400 font-semibold">Reconcile: </span>
+                              {String(step.params.reconcile_details)}
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -459,8 +493,14 @@ export default function Process() {
                     </div>
                     <div className="relative group/code">
                       <div className="absolute inset-0 bg-emerald-500/5 rounded-2xl blur-xl opacity-0 group-hover/code:opacity-100 transition-opacity duration-500 pointer-events-none" />
-                      <div className="relative p-5 rounded-2xl bg-[#0d1117] border border-emerald-500/20 text-[13px] font-mono text-emerald-300 overflow-x-auto whitespace-pre custom-scrollbar leading-relaxed">
-                        {selectedEval.response}
+                      <div
+                        className={`relative p-5 rounded-2xl bg-[#0d1117] border border-emerald-500/20 text-[13px] font-mono overflow-x-auto whitespace-pre-wrap break-words custom-scrollbar leading-relaxed min-h-[3rem] ${
+                          selectedEval.response && String(selectedEval.response).trim() ? 'text-emerald-300' : 'text-slate-500 italic'
+                        }`}
+                      >
+                        {selectedEval.response && String(selectedEval.response).trim()
+                          ? String(selectedEval.response)
+                          : '이 실행에는 generated_code가 로그에 없습니다. (multi_agent 등 코드 없이 답만 낸 경우, 또는 코드 생성 전 실패) Runtime Feedback·각 단계의 execution_result를 보세요.'}
                       </div>
                     </div>
                   </div>

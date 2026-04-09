@@ -9,7 +9,8 @@ from .evaluation_utils import (
     check_answer_correctness,
     classify_answer_match,
     extract_aime_answer,
-    determine_difficulty_from_source
+    determine_difficulty_from_source,
+    determine_easy_stratum,
 )
 
 from . import config
@@ -78,6 +79,7 @@ __all__ = [
     'classify_answer_match',
     'extract_aime_answer',
     'determine_difficulty_from_source',
+    'determine_easy_stratum',
     'config'
 ]
 

@@ -1,6 +1,6 @@
 # Cloud Shell — Vertex Endpoint 품질 평가 (최소 설치)
 
-`eval_vertex_endpoint_quality.py`만 돌릴 때는 **`requirements.txt` 전체를 설치하지 않는다** (torch 등으로 디스크 부족).  
+`eval_vertex_endpoint_quality.py`만 돌릴 때는 `**requirements.txt` 전체를 설치하지 않는다** (torch 등으로 디스크 부족).  
 고정 프로필·엔드포인트 ID: [../vertex/AIMO_GCP_PROFILE.md](../vertex/AIMO_GCP_PROFILE.md)
 
 ## 1) 저장소·브랜치
@@ -37,10 +37,10 @@ bash scripts/vertex/run_aimo_gcp_smoke.sh
 
 ## 5) 엔드포인트 품질 스모크 (추출·타임아웃)
 
-- **`--dump-predictions`** — 처음 1~2문항에서 원시 `predictions` 페이로드를 stderr에 덤프(스키마 확인).
-- **`--predict-timeout 20`** — 벽시계 타임아웃 스모크(지연 감지).
-- **`--vertex-predict-retries 0`** — 재시도 없이 1회만.
-- 형식 유도 1회만: **`--max-format-retries 0`** (strict-first 1회; `--no-format-gate` 대신 권장).
+- `**--dump-predictions**` — 처음 1~2문항에서 원시 `predictions` 페이로드를 stderr에 덤프(스키마 확인).
+- `**--predict-timeout 20**` — 벽시계 타임아웃 스모크(지연 감지).
+- `**--vertex-predict-retries 0**` — 재시도 없이 1회만.
+- 형식 유도 1회만: `**--max-format-retries 0**` (strict-first 1회; `--no-format-gate` 대신 권장).
 
 ```bash
 python3 scripts/vertex/eval_vertex_endpoint_quality.py \
@@ -61,8 +61,11 @@ python3 scripts/vertex/eval_vertex_endpoint_quality.py \
 
 ## 검증 기준 (플랜과 동일)
 
-| 단계 | 조건 |
-|------|------|
+
+| 단계    | 조건                                              |
+| ----- | ----------------------------------------------- |
 | Smoke | `n=2`, `api_error==0`, `raw_text_head` 비어 있지 않음 |
-| Mini | `n=10`, `graded` ≥ 1 |
-| Scale | Custom Job 후 summary JSON + 게이트 스크립트 정상 |
+| Mini  | `n=10`, `graded` ≥ 1                            |
+| Scale | Custom Job 후 summary JSON + 게이트 스크립트 정상         |
+
+

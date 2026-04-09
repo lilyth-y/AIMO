@@ -269,6 +269,7 @@ class EvaluationMetrics:
                 'avg_time': 0.0,
                 'by_problem_type': {},
                 'by_question_type': {},
+                'by_easy_stratum': {},
             }
         
         total = len(self.results)
@@ -341,6 +342,7 @@ class EvaluationMetrics:
 
         by_problem_type = _accuracy_by_metadata_label(self.results, "problem_type")
         by_question_type = _accuracy_by_metadata_label(self.results, "question_type")
+        by_easy_stratum = _accuracy_by_metadata_label(self.results, "easy_stratum")
         
         return {
             'total': total,
@@ -356,6 +358,7 @@ class EvaluationMetrics:
             'by_method': method_accuracy,
             'by_problem_type': by_problem_type,
             'by_question_type': by_question_type,
+            'by_easy_stratum': by_easy_stratum,
         }
     
     def save_results(self, output_dir: str = "results", 
@@ -409,6 +412,11 @@ class EvaluationMetrics:
             print(f"\n난이도별 정확도:")
             for diff, stats in sorted(metrics['by_difficulty'].items()):
                 print(f"  {diff:12s}: {stats['correct']:3d}/{stats['total']:3d} ({stats['accuracy']:5.1f}%)")
+
+        if metrics.get("by_easy_stratum"):
+            print(f"\nEasy 세부 층 (easy_stratum):")
+            for lab, stats in sorted(metrics["by_easy_stratum"].items()):
+                print(f"  {lab:32s}: {stats['correct']:3d}/{stats['total']:3d} ({stats['accuracy']:5.1f}%)")
         
         if metrics['by_source']:
             print(f"\n소스별 정확도:")
@@ -479,6 +487,41 @@ def determine_difficulty_from_source(source: str) -> str:
         return 'hard'
     else:
         return 'medium'
+
+
+def determine_easy_stratum(
+    source: str,
+    *,
+    problem_type: Optional[str] = None,
+    style: str = "source",
+) -> Optional[str]:
+    """
+    coarse 난이도가 ``easy`` 인 문제에 대한 세부 층(보고·층화용).
+
+    ``style``:
+      - ``source``: 데이터 소스명 (예: ``orca_math``, ``gsm8k``)
+      - ``problem_type``: ``problem_type`` 필드 기반 (공백·특수문자는 ``_`` 로 단순화)
+      - ``composite``: ``{source}__{problem_type_safe}``
+
+    coarse가 easy가 아니면 ``None``.
+    """
+    if determine_difficulty_from_source(str(source or "").strip() or "unknown") != "easy":
+        return None
+    src = str(source or "unknown").strip() or "unknown"
+    raw_pt = str(problem_type).strip() if problem_type is not None else ""
+    pt = re.sub(r"\s+", "_", raw_pt.strip())
+    pt = re.sub(r"[^\w\-]+", "_", pt).strip("_")[:80]
+    if not pt:
+        pt = "unknown"
+
+    st = (style or "source").strip().lower()
+    if st == "source":
+        return src
+    if st == "problem_type":
+        return pt
+    if st == "composite":
+        return f"{src}__{pt}"
+    return None
 
 
 def mcnemar_exact_two_sided_p_value(b_only: int, t_only: int) -> float:

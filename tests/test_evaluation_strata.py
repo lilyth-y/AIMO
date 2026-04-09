@@ -58,12 +58,15 @@ def test_by_problem_type_and_question_type():
     assert out["by_question_type"]["proof"]["correct"] == 1
     assert out["by_question_type"]["unknown"]["total"] == 1
 
+    assert out["by_easy_stratum"]["unknown"]["total"] == 4
+
 
 def test_empty_metrics_has_strata_keys():
     m = EvaluationMetrics(dataset_name="empty")
     out = m.calculate_metrics()
     assert out["by_problem_type"] == {}
     assert out["by_question_type"] == {}
+    assert out["by_easy_stratum"] == {}
 
 
 def test_mcnemar_exact_symmetric_discordant():

@@ -709,7 +709,17 @@ class Solver:
     def _extract_code(self, response: str) -> str:
         """
         Extracts code from markdown blocks if present and validates syntax.
+        On failure, returns ``print('ERROR: Code generation failed')`` so the
+        executor surfaces a stable string (see logs / dashboard).
         """
+        raw_in = response if isinstance(response, str) else ""
+        # Budget / provider errors are returned as plain text, not Python.
+        if isinstance(response, str) and response.strip().startswith("ERROR:"):
+            self.last_syntax_error = False
+            msg = response.strip()
+            logger.warning("LLM returned error text instead of code: %s", msg[:300])
+            return f"print({repr(msg)})"
+
         code = response.strip()
 
         # Normalize problematic Unicode whitespace that often appears in model output
@@ -800,6 +810,15 @@ class Solver:
                 logger.debug(f"Problematic code: {repr(code[:200])}...")
             else:
                 logger.debug(f"Problematic code: {repr(code)}")
+            if os.getenv("AIMO_LOG_FAILED_CODEGEN", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            ):
+                logger.warning(
+                    "AIMO_LOG_FAILED_CODEGEN: raw model output prefix (repr): %r",
+                    raw_in[:1200],
+                )
             self.last_syntax_error = True
             code = "print('ERROR: Code generation failed')"
         return code

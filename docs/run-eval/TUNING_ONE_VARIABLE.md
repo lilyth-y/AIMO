@@ -9,13 +9,15 @@
 
 한 실험당 아래 **하나만** 바꾼다 (나머지는 이전 실행과 동일).
 
-| 변수 | 의미 |
-|------|------|
-| `max_format_retries` | 형식 재시도 횟수 |
-| `retry_temperature` | 재시도 시 온도 |
-| `verify_max_new_tokens` | 검증 단계 토큰 상한 |
-| `--last-resort-extraction` | 마지막 수단 추출 on/off |
-| `--no-format-gate` | 형식 게이트 비교 전용 실험 시 |
+
+| 변수                         | 의미                |
+| -------------------------- | ----------------- |
+| `max_format_retries`       | 형식 재시도 횟수         |
+| `retry_temperature`        | 재시도 시 온도          |
+| `verify_max_new_tokens`    | 검증 단계 토큰 상한       |
+| `--last-resort-extraction` | 마지막 수단 추출 on/off  |
+| `--no-format-gate`         | 형식 게이트 비교 전용 실험 시 |
+
 
 **분석**: 결과 JSONL에 대해 [scripts/vertex/diagnose_vertex_eval_jsonl.py](../../scripts/vertex/diagnose_vertex_eval_jsonl.py) 실행.
 
@@ -23,13 +25,15 @@
 
 한 실험당 아래 **하나만** 바꾼다.
 
-| 변수 | 파일·참고 |
-|------|-----------|
-| `AIMO_OPTIMIZE_ACCURACY` | `src/pipeline/settings.py` |
-| `OMI_USE_VOTING` | 다후보 투표 |
-| `OMI_NUM_CANDIDATES` | 후보 수 |
-| `OMI_REFINE_*` | Refine 루프 |
-| `AIMO_SELF_CORRECTION_MAX_ATTEMPTS` | 자기 수정 횟수 |
+
+| 변수                                  | 파일·참고                      |
+| ----------------------------------- | -------------------------- |
+| `AIMO_OPTIMIZE_ACCURACY`            | `src/pipeline/settings.py` |
+| `OMI_USE_VOTING`                    | 다후보 투표                     |
+| `OMI_NUM_CANDIDATES`                | 후보 수                       |
+| `OMI_REFINE_`*                      | Refine 루프                  |
+| `AIMO_SELF_CORRECTION_MAX_ATTEMPTS` | 자기 수정 횟수                   |
+
 
 **규모**: 소량 `n`(예: 5~10)으로 순차 비교한 뒤, §3.0 정책에 맞는 스트라타·게이트로 확대한다.
 

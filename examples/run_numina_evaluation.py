@@ -21,6 +21,14 @@ Run evaluation on NuminaMath Balanced Set (60 problems)
 ``EVAL_PROBLEM_TIMEOUT`` 을 켜면 예전에는 문제마다 서브프로세스로 돌려 **매 문제마다 가중치를 다시 로드**했다.
 지금은 기본이 **인프로세스**라서 타임아웃을 켜도 서브프로세스를 쓰지 않는다 (타임아웃은 무시됨).
 정말 문제마다 자식 프로세스로 끊고 싶다면 ``AIMO_EVAL_IN_PROCESS=0`` 을 설정한다 (로컬 대형 모델에는 비권장).
+
+진단·실험 채점:
+  ``AIMO_EVAL_DIAGNOSTICS=1`` (기본): 행 메타에 추출 진단 필드 추가.
+  ``AIMO_EVAL_PREFER_DIAGNOSTIC_CANDIDATE=1``: 진단상 alternate 추출이 정답과 일치하면 **그 문자열로 재채점** (실험용; 기본은 끔).
+
+Easy 세분화 (``--difficulty-at-most easy`` 와 함께 권장):
+  ``--easy-stratum source`` | ``problem_type`` | ``composite``
+  또는 환경 변수 ``EVAL_EASY_STRATUM`` (동일 값). 결과 JSON·요약에 ``by_easy_stratum`` 및 행 ``easy_stratum`` 추가.
 """
 
 import argparse
@@ -28,6 +36,7 @@ import sys
 import os
 from pathlib import Path
 from typing import List, Optional, Tuple
+from concurrent.futures import ProcessPoolExecutor, as_completed
 # Reduce TensorFlow oneDNN log noise (set before any tf import)
 os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
 
@@ -39,7 +48,10 @@ import multiprocessing
 from pipeline.orchestrator import PipelineOrchestrator
 from evaluation.evaluation_utils import (
     EvaluationMetrics, EvaluationResult,
-    check_answer_correctness, determine_difficulty_from_source
+    check_answer_correctness,
+    classify_answer_match,
+    determine_difficulty_from_source,
+    determine_easy_stratum,
 )
 from tqdm import tqdm
 
@@ -65,6 +77,7 @@ def _env_bool_default(name: str, default: bool) -> bool:
 # Default True: one orchestrator, HF weights load once. Set AIMO_EVAL_IN_PROCESS=0 only if you intentionally want
 # subprocess-per-problem (e.g. hard kill) and accept full model reload each time.
 AIMO_EVAL_IN_PROCESS = _env_bool_default("AIMO_EVAL_IN_PROCESS", True)
+EVAL_WORKERS = max(1, int(os.environ.get("EVAL_WORKERS", "1")))
 
 
 def _difficulty_rank(label: str) -> int:
@@ -88,8 +101,8 @@ def filter_problems_by_difficulty_at_most(problems: List[dict], cap: str) -> Lis
     return [p for p in problems if isinstance(p, dict) and _problem_passes_difficulty_at_most(p, cap)]
 
 
-def _parse_eval_cli() -> Tuple[Optional[str], str]:
-    """Returns (difficulty_cap, data_filename for find_data_file)."""
+def _parse_eval_cli() -> Tuple[Optional[str], str, int, str]:
+    """Returns (difficulty_cap, data_filename, workers, easy_stratum_mode)."""
     p = argparse.ArgumentParser(add_help=False)
     p.add_argument(
         "--difficulty-at-most",
@@ -101,6 +114,18 @@ def _parse_eval_cli() -> Tuple[Optional[str], str]:
         default=None,
         help="예: numina_training_5k.jsonl (기본: numina_eval_balanced.json)",
     )
+    p.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="문제 단위 병렬 워커 수 (기본: env EVAL_WORKERS 또는 1)",
+    )
+    p.add_argument(
+        "--easy-stratum",
+        choices=("none", "source", "problem_type", "composite"),
+        default=None,
+        help="easy 난이도만 세부 층화(metadata easy_stratum, summary by_easy_stratum)",
+    )
     args, _ = p.parse_known_args()
     cap = args.difficulty_at_most
     if cap is None:
@@ -110,7 +135,16 @@ def _parse_eval_cli() -> Tuple[Optional[str], str]:
     data_file = args.data_file or os.environ.get("EVAL_DATA_FILE", "").strip()
     if not data_file:
         data_file = NUMINA_EVAL_BALANCED_FILE
-    return cap, data_file
+    workers = int(args.workers) if args.workers is not None else EVAL_WORKERS
+    workers = max(1, workers)
+    easy_stratum = args.easy_stratum
+    if easy_stratum is None:
+        ee = os.environ.get("EVAL_EASY_STRATUM", "").strip().lower()
+        if ee in ("none", "source", "problem_type", "composite"):
+            easy_stratum = ee
+        else:
+            easy_stratum = "none"
+    return cap, data_file, workers, easy_stratum
 
 
 def load_numina_eval() -> List[dict]:
@@ -174,6 +208,29 @@ def _solve_one(problem_text, domain, variables, time_budget):
     orch = PipelineOrchestrator()
     return orch.solve_problem(domain, variables, problem_text, time_budget=time_budget)
 
+
+_PARALLEL_WORKER_ORCH = None
+
+
+def _init_parallel_worker():
+    """ProcessPool worker initializer: load one orchestrator per process."""
+    global _PARALLEL_WORKER_ORCH
+    _PARALLEL_WORKER_ORCH = PipelineOrchestrator()
+
+
+def _solve_one_parallel(idx: int, problem_text: str):
+    """Solve one problem inside a long-lived worker process."""
+    global _PARALLEL_WORKER_ORCH
+    if _PARALLEL_WORKER_ORCH is None:
+        _PARALLEL_WORKER_ORCH = PipelineOrchestrator()
+    start_time = time.time()
+    result = _PARALLEL_WORKER_ORCH.solve_problem(
+        domain="general_math",
+        variables={},
+        problem_text=problem_text,
+    )
+    return idx, result, (time.time() - start_time)
+
 def evaluate_numina(
     orchestrator,
     problems,
@@ -182,6 +239,8 @@ def evaluate_numina(
     dataset_name: str = "NuminaMath_Balanced",
     results_filename: str = "numina_balanced_results.json",
     gradient_filename: str = "gradient_report_numina.json",
+    workers: int = 1,
+    easy_stratum_mode: str = "none",
 ):
     """
     Evaluate on NuminaMath balanced set
@@ -190,6 +249,7 @@ def evaluate_numina(
         orchestrator: Orchestrator instance
         problems: List of NuminaMath problems
         max_problems: Limit number of problems (for testing)
+        easy_stratum_mode: ``none`` | ``source`` | ``problem_type`` | ``composite`` — easy 소스만 세부 층 라벨
     """
     if max_problems:
         problems = problems[:max_problems]
@@ -215,13 +275,21 @@ def evaluate_numina(
             "NOTE: in-process eval — EVAL_PROBLEM_TIMEOUT does not spawn workers; timeout is not enforced per problem.",
             file=sys.stderr,
         )
+    parallel_workers = max(1, int(workers))
+    parallel_enabled = parallel_workers > 1 and not use_subproc_timeout
 
-    for idx, problem_data in enumerate(tqdm(problems, desc="Solving NuminaMath")):
+    if parallel_enabled:
+        print(f"Parallel mode ON: workers={parallel_workers}")
+    elif parallel_workers > 1 and use_subproc_timeout:
+        print(
+            "NOTE: --workers is ignored when subprocess timeout mode is enabled.",
+            file=sys.stderr,
+        )
+
+    def _build_eval_result(idx: int, problem_data: dict, result: dict, solve_time: float) -> EvaluationResult:
         problem = problem_data['problem']
         reference_answer = problem_data.get('answer', '')
         source = problem_data.get('source', 'unknown')
-
-        # Determine difficulty from source
         difficulty = determine_difficulty_from_source(source)
 
         eval_meta = {}
@@ -232,82 +300,168 @@ def evaluate_numina(
         if qt is not None and str(qt).strip():
             eval_meta["question_type"] = str(qt).strip()
 
-        try:
-            start_time = time.time()
-            if use_subproc_timeout:
-                # Run in subprocess so we can timeout and always move to next problem
-                with multiprocessing.Pool(1) as pool:
-                    async_res = pool.apply_async(
-                        _solve_one,
-                        (problem, "general_math", {}, 60.0)
-                    )
-                    try:
-                        result = async_res.get(timeout=EVAL_PROBLEM_TIMEOUT)
-                    except multiprocessing.TimeoutError:
-                        result = {
-                            'answer': None,
-                            'method': 'timeout',
-                            'execution_result': f'Problem timed out after {EVAL_PROBLEM_TIMEOUT}s',
-                        }
-            else:
-                # variables 빈 dict 유지: 정답 레이블을 파이프라인에 넣지 않음(유출 방지).
-                # 최종 채점은 아래 check_answer_correctness(reference, pred)만 사용.
-                result = orchestrator.solve_problem(
-                    domain="general_math",
-                    variables={},
-                    problem_text=problem
+        predicted_answer = result.get('answer', 'N/A')
+        is_correct = check_answer_correctness(reference_answer, predicted_answer)
+
+        if easy_stratum_mode and easy_stratum_mode != "none":
+            es = determine_easy_stratum(
+                source,
+                problem_type=problem_data.get("problem_type"),
+                style=easy_stratum_mode,
+            )
+            if es:
+                eval_meta["easy_stratum"] = es
+
+        if _env_bool_default("AIMO_EVAL_DIAGNOSTICS", True):
+            try:
+                from evaluation.answer_diagnostics import diagnose_numina_result
+
+                eval_meta.update(
+                    diagnose_numina_result(reference_answer, predicted_answer, result)
                 )
-            solve_time = time.time() - start_time
-            predicted_answer = result.get('answer', 'N/A')
+            except Exception as e:
+                eval_meta["diagnostics_error"] = str(e)[:200]
 
-            # Check correctness using unified utility
-            is_correct = check_answer_correctness(reference_answer, predicted_answer)
+            if _env_bool_default("AIMO_EVAL_PREFER_DIAGNOSTIC_CANDIDATE", False):
+                ba = eval_meta.get("best_alternate_answer")
+                if eval_meta.get("alternate_would_pass") and ba:
+                    eval_meta["original_predicted_answer"] = predicted_answer
+                    predicted_answer = ba
+                    is_correct = check_answer_correctness(reference_answer, predicted_answer)
+                    eval_meta["graded_with_diagnostic_candidate"] = True
+                    ps = predicted_answer
+                    if isinstance(ps, str) and ps.strip().upper() == "N/A":
+                        ps = None
+                    if ps is None or (isinstance(ps, str) and not str(ps).strip()):
+                        mk = "none"
+                    else:
+                        mk = classify_answer_match(
+                            reference_answer, str(ps), use_sympy=True
+                        )
+                    eval_meta["grading_match_kind"] = mk
+                    eval_meta["eval_failure_axis"] = (
+                        "correct" if is_correct else eval_meta.get("eval_failure_axis")
+                    )
+                    eval_meta["counterfactual_would_pass"] = is_correct
 
-            # P5: capture failure reason for error_summary (syntax/runtime/timeout/oom etc.)
-            fail_reason = None
-            if not is_correct or result.get('method') == 'all_failed':
-                ex = result.get('execution_result') or result.get('error')
-                if ex and isinstance(ex, str) and ('Error:' in ex or 'failed' in ex.lower()):
-                    fail_reason = ex[:500]
-            if result.get('method') == 'timeout':
-                fail_reason = result.get('execution_result') or 'timeout'
+        fail_reason = None
+        if not is_correct or result.get('method') == 'all_failed':
+            ex = result.get('execution_result') or result.get('error')
+            if ex and isinstance(ex, str) and ('Error:' in ex or 'failed' in ex.lower()):
+                fail_reason = ex[:500]
+        if result.get('method') == 'timeout':
+            fail_reason = result.get('execution_result') or 'timeout'
 
-            # Create result entry
-            eval_result = EvaluationResult(
-                problem_id=idx,
-                problem=problem,
-                reference_answer=reference_answer,
-                predicted_answer=predicted_answer,
-                is_correct=is_correct,
-                solve_time=solve_time,
-                method=result.get('method', 'unknown'),
-                difficulty=difficulty,
-                source=source,
-                error=fail_reason,
-                metadata=eval_meta if eval_meta else None,
-            )
-            
-            metrics.add_result(eval_result)
-            status = "ok" if is_correct else "fail"
-            print(f"\n  [{idx+1}/{total}] {status} ({result.get('method', '?')})")
+        return EvaluationResult(
+            problem_id=idx,
+            problem=problem,
+            reference_answer=reference_answer,
+            predicted_answer=predicted_answer,
+            is_correct=is_correct,
+            solve_time=solve_time,
+            method=result.get('method', 'unknown'),
+            difficulty=difficulty,
+            source=source,
+            error=fail_reason,
+            metadata=eval_meta if eval_meta else None,
+        )
 
-            if (idx + 1) % 10 == 0:
-                current_metrics = metrics.calculate_metrics()
-                current_accuracy = current_metrics['accuracy']
-                print(f"Progress: {idx+1}/{total} | Accuracy: {current_accuracy:.1f}%")
-        except Exception as e:
-            print(f"\nError on problem {idx} ({source}): {str(e)}")
-            eval_result = EvaluationResult(
-                problem_id=idx,
-                problem=problem,
-                reference_answer=reference_answer,
-                is_correct=False,
-                error=str(e),
-                difficulty=difficulty,
-                source=source,
-                metadata=eval_meta if eval_meta else None,
-            )
-            metrics.add_result(eval_result)
+    completed = 0
+    if parallel_enabled:
+        futures = {}
+        with ProcessPoolExecutor(
+            max_workers=parallel_workers,
+            initializer=_init_parallel_worker,
+        ) as executor:
+            for idx, problem_data in enumerate(problems):
+                futures[executor.submit(_solve_one_parallel, idx, problem_data["problem"])] = idx
+
+            for fut in tqdm(as_completed(futures), total=total, desc="Solving NuminaMath (parallel)"):
+                idx = futures[fut]
+                problem_data = problems[idx]
+                try:
+                    _, result, solve_time = fut.result()
+                except Exception as e:
+                    result = {
+                        'answer': None,
+                        'method': 'worker_exception',
+                        'execution_result': str(e),
+                        'error': str(e),
+                    }
+                    solve_time = 0.0
+
+                eval_result = _build_eval_result(idx, problem_data, result, solve_time)
+                metrics.add_result(eval_result)
+
+                completed += 1
+                status = "ok" if eval_result.is_correct else "fail"
+                print(f"\n  [{completed}/{total}] {status} ({result.get('method', '?')}) #problem={idx+1}")
+
+                if completed % 10 == 0:
+                    current_metrics = metrics.calculate_metrics()
+                    current_accuracy = current_metrics['accuracy']
+                    print(f"Progress: {completed}/{total} | Accuracy: {current_accuracy:.1f}%")
+    else:
+        for idx, problem_data in enumerate(tqdm(problems, desc="Solving NuminaMath")):
+            problem = problem_data['problem']
+            source = problem_data.get('source', 'unknown')
+            try:
+                start_time = time.time()
+                if use_subproc_timeout:
+                    # Run in subprocess so we can timeout and always move to next problem
+                    with multiprocessing.Pool(1) as pool:
+                        async_res = pool.apply_async(
+                            _solve_one,
+                            (problem, "general_math", {}, 60.0)
+                        )
+                        try:
+                            result = async_res.get(timeout=EVAL_PROBLEM_TIMEOUT)
+                        except multiprocessing.TimeoutError:
+                            result = {
+                                'answer': None,
+                                'method': 'timeout',
+                                'execution_result': f'Problem timed out after {EVAL_PROBLEM_TIMEOUT}s',
+                            }
+                else:
+                    # variables 빈 dict 유지: 정답 레이블을 파이프라인에 넣지 않음(유출 방지).
+                    # 최종 채점은 아래 check_answer_correctness(reference, pred)만 사용.
+                    result = orchestrator.solve_problem(
+                        domain="general_math",
+                        variables={},
+                        problem_text=problem
+                    )
+                solve_time = time.time() - start_time
+                eval_result = _build_eval_result(idx, problem_data, result, solve_time)
+                metrics.add_result(eval_result)
+                status = "ok" if eval_result.is_correct else "fail"
+                print(f"\n  [{idx+1}/{total}] {status} ({result.get('method', '?')})")
+
+                if (idx + 1) % 10 == 0:
+                    current_metrics = metrics.calculate_metrics()
+                    current_accuracy = current_metrics['accuracy']
+                    print(f"Progress: {idx+1}/{total} | Accuracy: {current_accuracy:.1f}%")
+            except Exception as e:
+                print(f"\nError on problem {idx} ({source}): {str(e)}")
+                reference_answer = problem_data.get('answer', '')
+                difficulty = determine_difficulty_from_source(source)
+                eval_meta = {}
+                pt = problem_data.get("problem_type")
+                if pt is not None and str(pt).strip():
+                    eval_meta["problem_type"] = str(pt).strip()
+                qt = problem_data.get("question_type")
+                if qt is not None and str(qt).strip():
+                    eval_meta["question_type"] = str(qt).strip()
+                eval_result = EvaluationResult(
+                    problem_id=idx,
+                    problem=problem,
+                    reference_answer=reference_answer,
+                    is_correct=False,
+                    error=str(e),
+                    difficulty=difficulty,
+                    source=source,
+                    metadata=eval_meta if eval_meta else None,
+                )
+                metrics.add_result(eval_result)
     
     metrics.finish()
     
@@ -368,7 +522,7 @@ def evaluate_numina(
     return final_metrics['accuracy'], [r.to_dict() for r in metrics.results]
 
 def main():
-    difficulty_cap, data_filename = _parse_eval_cli()
+    difficulty_cap, data_filename, workers, easy_stratum = _parse_eval_cli()
     max_problems_env = os.environ.get("MAX_PROBLEMS")
     max_problems = int(max_problems_env) if max_problems_env is not None and max_problems_env.isdigit() else None
     path_resolved = find_data_file(data_filename)
@@ -390,6 +544,9 @@ def main():
             "- olympiads/amc_aime/aops 등 hard 소스 제외"
         )
     print("Purpose: Development and mixed-difficulty testing")
+    print(f"Workers: {workers}")
+    if difficulty_cap == "easy" and easy_stratum != "none":
+        print(f"Easy stratum mode: {easy_stratum} (--easy-stratum / EVAL_EASY_STRATUM)")
     print("="*70)
     
     # Load problems
@@ -446,6 +603,8 @@ def main():
         dataset_name=ds_name,
         results_filename=res_file,
         gradient_filename=grad_file,
+        workers=workers,
+        easy_stratum_mode=easy_stratum,
     )
     
     # Analysis

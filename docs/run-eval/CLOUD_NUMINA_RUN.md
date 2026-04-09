@@ -4,10 +4,12 @@
 
 ## 무엇을 쓰나
 
-| 방식 | 추론 | 비고 |
-|------|------|------|
-| **Vertex AI (Gemini)** | 관리형 API | `solver.generate()`가 Vertex를 먼저 탐 (`docs/run-eval/VERTEX_AI.md`) |
-| **Kaggle 노트북** | 런타임 GPU 또는 게이트웨이 | `notebooks/run_numina_on_kaggle.ipynb` |
+
+| 방식                     | 추론               | 비고                                                               |
+| ---------------------- | ---------------- | ---------------------------------------------------------------- |
+| **Vertex AI (Gemini)** | 관리형 API          | `solver.generate()`가 Vertex를 먼저 탐 (`docs/run-eval/VERTEX_AI.md`) |
+| **Kaggle 노트북**         | 런타임 GPU 또는 게이트웨이 | `notebooks/run_numina_on_kaggle.ipynb`                           |
+
 
 Vertex가 잡히면 **로컬 HF 7B 로드 없이** API 호출만 한다. 로그에 `Loading checkpoint shards`가 나오면 **Vertex 설정이 안 된 것**이니 아래 환경 변수를 다시 확인한다.
 
@@ -24,7 +26,7 @@ git pull   # scripts/eval/·문서가 없으면 최신 브랜치를 당긴다
 test -f requirements.txt && test -f scripts/eval/run_numina_vertex_cloud.sh && echo OK || echo "WRONG DIRECTORY — cd into AIMO repo root"
 ```
 
-이후 모든 `pip` / `python` / `bash scripts/...` 는 **`cd AIMO` 한 뒤** 실행한다.
+이후 모든 `pip` / `python` / `bash scripts/...` 는 `**cd AIMO` 한 뒤** 실행한다.
 
 ### 0.5) GCP 고정 프로필·연결 스모크 (권장)
 
@@ -43,7 +45,7 @@ bash scripts/vertex/run_aimo_gcp_smoke.sh
 
 #### Cloud Shell 주의 (`/home` 약 5GB)
 
-- `requirements.txt`에는 **torch·transformers·CUDA 휠** 등이 포함되어 **수 GB**를 쓴다. `pip install --user`는 **`~/.local`(홈 디스크)** 에 쌓여 **`No space left on device`** 가 나기 쉽다.
+- `requirements.txt`에는 **torch·transformers·CUDA 휠** 등이 포함되어 **수 GB**를 쓴다. `pip install --user`는 `**~/.local`(홈 디스크)** 에 쌓여 `**No space left on device`** 가 나기 쉽다.
 - **Vertex 연동만 먼저 확인**할 때는 **전체 `requirements.txt`를 홈에 설치하지 말 것.**
 
 **A) Vertex Gemini 스모크만 (최소, 권장 첫 단계)**
@@ -91,12 +93,6 @@ export PYTHONPATH="/tmp/aimo-pypi:${PYTHONPATH}"
 
 ### 3) 프로젝트·리전 (예시)
 
-   ```bash
-   export GOOGLE_CLOUD_PROJECT=gen-lang-client-0300734101
-   export GOOGLE_CLOUD_LOCATION=us-central1
-   export VERTEX_AI_MODEL=gemini-2.5-flash-lite   # 필요 시 변경
-   ```
-
 ### 4) 인프로세스·50문제 (모델은 프로세스당 한 번만 로드)
 
 저장소 루트에서:
@@ -121,13 +117,15 @@ bash scripts/eval/run_numina_vertex_cloud.sh
 
 ### GCE에서 본 오류 정리
 
-| 증상 | 원인 | 조치 |
-|------|------|------|
-| `No such file ... requirements.txt` | 루트가 아님 | `cd` 로 AIMO 루트, `test -f requirements.txt` |
-| `run_numina_vertex_cloud.sh: No such file` | 옛 클론 또는 루트 아님 | `git pull`, 루트에서 `ls scripts/eval/` |
-| `Defaulting to user installation` | 시스템 site-packages 쓰기 불가 | 정상; `--user` 또는 venv 사용 |
-| `No space left on device` (설치 중) | `requirements.txt` + `--user` 가 홈을 채움 | **Cloud Shell에서는 `requirements.txt`를 홈에 전부 설치하지 말 것**; 위 **§1 A/B** 참고 |
-| `requirements-vertex.txt` 없음 | 루트가 아님 | `cd ~/AIMO` 후 `-r` 실행 |
+
+| 증상                                         | 원인                                    | 조치                                                                     |
+| ------------------------------------------ | ------------------------------------- | ---------------------------------------------------------------------- |
+| `No such file ... requirements.txt`        | 루트가 아님                                | `cd` 로 AIMO 루트, `test -f requirements.txt`                             |
+| `run_numina_vertex_cloud.sh: No such file` | 옛 클론 또는 루트 아님                         | `git pull`, 루트에서 `ls scripts/eval/`                                    |
+| `Defaulting to user installation`          | 시스템 site-packages 쓰기 불가               | 정상; `--user` 또는 venv 사용                                                |
+| `No space left on device` (설치 중)           | `requirements.txt` + `--user` 가 홈을 채움 | **Cloud Shell에서는 `requirements.txt`를 홈에 전부 설치하지 말 것**; 위 **§1 A/B** 참고 |
+| `requirements-vertex.txt` 없음               | 루트가 아님                                | `cd ~/AIMO` 후 `-r` 실행                                                  |
+
 
 ## 경로 B: Kaggle
 
@@ -142,3 +140,4 @@ bash scripts/eval/run_numina_vertex_cloud.sh
 
 - `VERTEX_AI.md` — 환경 변수·인증·동작 순서
 - `README_AIMO_EVAL.md` — 평가 개요
+

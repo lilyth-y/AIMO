@@ -13,6 +13,7 @@ AIMO 프로젝트에서 문제의 유형과 종류의 다양성을 확보하고 
 **파일**: `src/pipeline/problem_diversity.py`
 
 **주요 기능**:
+
 - 도메인 분류 (8개 도메인)
 - 난이도 분류 (4단계)
 - 형식 분류 (5가지)
@@ -25,6 +26,7 @@ AIMO 프로젝트에서 문제의 유형과 종류의 다양성을 확보하고 
 **파일**: `src/pipeline/stage1_labeling.py`
 
 **개선 사항**:
+
 - 더 많은 도메인 키워드 추가
 - Calculus 도메인 추가
 - 더 정확한 분류를 위한 키워드 확장
@@ -34,6 +36,7 @@ AIMO 프로젝트에서 문제의 유형과 종류의 다양성을 확보하고 
 **파일**: `scripts/analyze_problem_diversity.py`
 
 **기능**:
+
 - JSONL/JSON 파일에서 문제 로드
 - 다양성 분석 실행
 - 보고서 생성
@@ -57,6 +60,7 @@ AIMO 프로젝트에서 문제의 유형과 종류의 다양성을 확보하고 
 - **number_theory** (4,043): 정수론 문제
 
 **문제 유형 분포**:
+
 - Algebra
 - Geometry
 - Number Theory
@@ -69,6 +73,7 @@ AIMO 프로젝트에서 문제의 유형과 종류의 다양성을 확보하고 
 #### AIME Validation Set
 
 **90개 공식 AIME 문제**:
+
 - AIME 2022, 2023, 2024
 - 표준화된 벤치마크
 
@@ -77,16 +82,13 @@ AIMO 프로젝트에서 문제의 유형과 종류의 다양성을 확보하고 
 #### 다층 분류 시스템
 
 1. **Stage 1 (stage1_labeling.py)**: 기본 도메인 분류
-   - Geometry, Number Theory, Algebra, Combinatorics, Calculus, General
-
+  - Geometry, Number Theory, Algebra, Combinatorics, Calculus, General
 2. **Rapid Intuition (feature_extractor.py)**: 빠른 직관적 분류
-   - geometry, number_theory, algebra, calculus, puzzle, arithmetic, general, misc
-
+  - geometry, number_theory, algebra, calculus, puzzle, arithmetic, general, misc
 3. **Problem Type (orchestrator_helpers.py)**: 문제 유형 분류
-   - computational, geometric, complex
-
+  - computational, geometric, complex
 4. **Diversity Analyzer (problem_diversity.py)**: 종합 분석
-   - 8개 도메인, 4단계 난이도, 5가지 형식
+  - 8개 도메인, 4단계 난이도, 5가지 형식
 
 ### 3. 다양성 검증
 
@@ -131,28 +133,28 @@ else:
 
 ### 데이터셋 구성
 
-- [ ] **도메인 다양성**: 최소 5개 이상의 도메인 포함
+- **도메인 다양성**: 최소 5개 이상의 도메인 포함
   - Geometry, Number Theory, Algebra, Combinatorics, Calculus 등
-- [ ] **난이도 다양성**: 최소 3개 이상의 난이도 포함
+- **난이도 다양성**: 최소 3개 이상의 난이도 포함
   - Easy, Medium, Hard, Olympiad
-- [ ] **형식 다양성**: 최소 2개 이상의 형식 포함
+- **형식 다양성**: 최소 2개 이상의 형식 포함
   - word_problem, proof, optimization 등
-- [ ] **소스 다양성**: 최소 5개 이상의 다양한 소스
+- **소스 다양성**: 최소 5개 이상의 다양한 소스
   - olympiads, aops_forum, cn_contest 등
-- [ ] **커버리지 점수**: 0.6 이상 권장
+- **커버리지 점수**: 0.6 이상 권장
 
 ### 테스트 커버리지
 
-- [ ] **도메인별 테스트**: 각 도메인에 대해 3-5개 테스트 케이스
-- [ ] **난이도별 테스트**: 각 난이도에 대해 테스트 케이스
-- [ ] **형식별 테스트**: 각 형식에 대해 테스트 케이스
-- [ ] **복합 문제 테스트**: 여러 도메인이 혼합된 문제
+- **도메인별 테스트**: 각 도메인에 대해 3-5개 테스트 케이스
+- **난이도별 테스트**: 각 난이도에 대해 테스트 케이스
+- **형식별 테스트**: 각 형식에 대해 테스트 케이스
+- **복합 문제 테스트**: 여러 도메인이 혼합된 문제
 
 ### 시스템 검증
 
-- [ ] **분류 정확도**: 각 도메인별 분류 정확도 검증
-- [ ] **전략 라우팅**: 각 도메인에 적절한 전략 선택 확인
-- [ ] **처리 성공률**: 각 문제 유형별 처리 성공률 모니터링
+- **분류 정확도**: 각 도메인별 분류 정확도 검증
+- **전략 라우팅**: 각 도메인에 적절한 전략 선택 확인
+- **처리 성공률**: 각 문제 유형별 처리 성공률 모니터링
 
 ---
 

@@ -4,24 +4,30 @@ AIMO 파이프라인에서 GCP Vertex AI(Gemini)를 추론 백엔드로 사용�
 
 ## GCP 프로젝트 정보
 
-| 항목 | 값 |
-|------|-----|
+
+| 항목      | 값                            |
+| ------- | ---------------------------- |
 | 프로젝트 ID | `gen-lang-client-0300734101` |
-| 프로젝트 번호 | 341687483990 |
-| 기본 리전 | `us-central1` |
-| 기본 모델 | `gemini-2.5-flash-lite` |
+| 프로젝트 번호 | 341687483990                 |
+| 기본 리전   | `us-central1`                |
+| 기본 모델   | `gemini-2.5-flash-lite`      |
+
 
 ## 환경 변수
 
-| 변수 | 설명 | 기본값 |
-|------|------|--------|
-| `GOOGLE_CLOUD_PROJECT` 또는 `GCP_PROJECT` | GCP 프로젝트 ID | `gen-lang-client-0300734101` |
-| `GOOGLE_CLOUD_LOCATION` 또는 `VERTEX_AI_LOCATION` | Vertex AI 리전 | `us-central1` |
-| `VERTEX_AI_MODEL` | 사용할 Gemini 모델 | `gemini-2.5-flash-lite` |
-| `GOOGLE_GENAI_API_KEY` 또는 `VERTEX_AI_API_KEY` | (선택) Express 모드용 API 키 | - |
-| `AIMO_MAX_NEW_TOKENS` | 최대 출력 토큰 수 | `16384` |
+
+| 변수                                              | 설명                     | 기본값                          |
+| ----------------------------------------------- | ---------------------- | ---------------------------- |
+| `GOOGLE_CLOUD_PROJECT` 또는 `GCP_PROJECT`         | GCP 프로젝트 ID            | `gen-lang-client-0300734101` |
+| `GOOGLE_CLOUD_LOCATION` 또는 `VERTEX_AI_LOCATION` | Vertex AI 리전           | `us-central1`                |
+| `VERTEX_AI_MODEL`                               | 사용할 Gemini 모델          | `gemini-2.5-flash-lite`      |
+| `GOOGLE_GENAI_API_KEY` 또는 `VERTEX_AI_API_KEY`   | (선택) Express 모드용 API 키 | -                            |
+| `AIMO_MAX_NEW_TOKENS`                           | 최대 출력 토큰 수             | `16384`                      |
+
 
 Vertex가 **사용되는 조건**: `GOOGLE_CLOUD_PROJECT` 또는 `GCP_PROJECT` 또는 API 키 중 하나가 설정되어 있어야 합니다.
+
+**주의:** 위 변수를 셸에 **설정하지 않으면** `is_vertex_configured()` 가 거짓이 되어, `examples/run_numina_evaluation.py` 등이 **로컬 Hugging Face 모델을 로드**할 수 있습니다. Gemini만 쓰려면 실행 전에 최소 `GOOGLE_CLOUD_PROJECT` 를 설정하세요.
 
 ## 인증
 
@@ -65,7 +71,7 @@ pip install -r requirements-vertex.txt
 pip install google-genai
 ```
 
-**Google Cloud Shell 등 `/home` 용량이 작은 환경**: 전체 `requirements.txt`를 홈에 설치하면 디스크가 부족해질 수 있다. **Vertex 스모크만** 할 때는 루트의 `requirements-cloudshell-smoke.txt`와 절차 **`docs/run-eval/CLOUD_NUMINA_RUN.md` §1 A**를 따른다.
+**Google Cloud Shell 등 `/home` 용량이 작은 환경**: 전체 `requirements.txt`를 홈에 설치하면 디스크가 부족해질 수 있다. **Vertex 스모크만** 할 때는 루트의 `requirements-cloudshell-smoke.txt`와 절차 `**docs/run-eval/CLOUD_NUMINA_RUN.md` §1 A**를 따른다.
 
 ## 동작 순서
 
@@ -100,6 +106,10 @@ python examples/quick_vertex_test.py
 - **모델 ID**: 기본값은 `gemini-2.5-flash-lite` 입니다.
   - 빠른/저비용(권장): `VERTEX_AI_MODEL=gemini-2.5-flash-lite`
   - 프리뷰: `VERTEX_AI_MODEL=gemini-2.5-flash-lite-preview-09-2025`
+- **Gemini 3.1 Pro (프리뷰)**: 모델 ID `gemini-3.1-pro-preview`. 문서상 **Global** 엔드포인트이므로 리전을 **`global`** 로 맞춘 뒤 호출해야 `asia-northeast3` / `us-central1` 에서의 404를 피할 수 있습니다.  
+  - 예: `GOOGLE_CLOUD_LOCATION=global` (또는 `VERTEX_AI_LOCATION=global`), `VERTEX_AI_MODEL=gemini-3.1-pro-preview`  
+  - 스모크: `scripts/vertex/smoke_gemini_3_1_global.ps1` 또는 동일 환경 변수로 `python scripts/vertex/smoke_gemini_once.py`  
+  - 상세: [Gemini 3.1 Pro (Vertex)](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/3-1-pro)
 - 프로젝트/리전에 따라 사용 가능한 모델이 다를 수 있습니다. [Vertex AI 사용 가능 모델](https://cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versions) 참고.
 
 ## 참고
@@ -107,3 +117,4 @@ python examples/quick_vertex_test.py
 - Vertex AI SDK: [Google Gen AI Python](https://googleapis.github.io/python-genai/)
 - Vertex 문서: [Generative AI on Vertex AI](https://cloud.google.com/vertex-ai/generative-ai/docs)
 - 코드: `src/pipeline/vertex_inference.py`, `src/pipeline/solver.py` (Vertex 분기)
+

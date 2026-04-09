@@ -221,6 +221,21 @@ def test_utility_functions():
         traceback.print_exc()
         pytest.fail(str(e))
 
+
+def test_determine_easy_stratum():
+    from evaluation.evaluation_utils import determine_easy_stratum
+
+    assert determine_easy_stratum("orca_math", style="source") == "orca_math"
+    assert determine_easy_stratum("gsm8k", style="source") == "gsm8k"
+    assert determine_easy_stratum("metamath", style="source") is None
+    assert (
+        determine_easy_stratum("orca_math", problem_type="Number Theory", style="problem_type")
+        == "Number_Theory"
+    )
+    c = determine_easy_stratum("orca_math", problem_type="Algebra", style="composite")
+    assert c is not None and c.startswith("orca_math__")
+
+
 def main():
     """모든 테스트 실행"""
     print("\n" + "="*70)
@@ -233,7 +248,8 @@ def main():
         test_evaluation_metrics,
         test_answer_correctness,
         test_config_paths,
-        test_utility_functions
+        test_utility_functions,
+        test_determine_easy_stratum,
     ]
     
     results = []
