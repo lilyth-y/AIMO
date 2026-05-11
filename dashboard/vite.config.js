@@ -1,15 +1,28 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-export default defineConfig({
-    plugins: [react()],
-    root: '.',
-    publicDir: 'public',
-    build: {
-        outDir: 'dist',
-    },
-    server: {
-        port: 5176,
-        host: '0.0.0.0', // IPv4(127.0.0.1) + IPv6(::1) 모두 접속 가능
-        strictPort: false,
-    },
+
+export default defineConfig(({ mode }) => {
+    const env = loadEnv(mode, process.cwd(), '');
+    const apiTarget = env.VITE_API_URL || 'http://localhost:8080';
+
+    return {
+        plugins: [react()],
+        root: '.',
+        publicDir: 'public',
+        build: {
+            outDir: 'dist',
+        },
+        server: {
+            port: 5176,
+            host: '0.0.0.0',
+            strictPort: false,
+            proxy: {
+                '/api': {
+                    target: apiTarget,
+                    changeOrigin: true,
+                    rewrite: (path) => path.replace(/^\/api/, ''),
+                },
+            },
+        },
+    };
 });
