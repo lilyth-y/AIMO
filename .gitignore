@@ -40,6 +40,9 @@ evaluation_output.txt
 !data/numina_eval_balanced.json
 !tests/fixtures/ralph_gate_pass.json
 !data/eval/trusted_subset_seed.jsonl
+!dashboard/package.json
+!dashboard/package-lock.json
+!dashboard/tsconfig.json
 *.jsonl
 !data/eval/trusted_subset_seed.jsonl
 logs/
