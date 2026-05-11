@@ -32,6 +32,58 @@ GEOMETRY_KEYWORDS = [
 COMPLEXITY_CLAUSE_SEPARATORS = [',', ';']
 SYMBOLS = ['+', '-', '*', '/', '^', '=', '<', '>', '≥', '≤']
 
+def execution_output_requires_raw_return(output: str) -> bool:
+    """
+    True when executor output is an error-like blob that must be treated as raw text
+    (i.e., we should NOT attempt to parse a numeric answer from it).
+
+    This is used by helpers like ``is_execution_error_output`` and is intentionally
+    conservative: it prefers false negatives (keep parsing) over false positives
+    (mask valid numeric answers).
+    """
+    if output is None:
+        return True
+    s = str(output)
+    if not s.strip():
+        return True
+    ss = s.strip()
+    up = ss.upper()
+
+    # Executor-style prefix
+    if ss.startswith("Error:"):
+        return True
+
+    # Python traceback / common exception names.
+    if "TRACEBACK" in up:
+        return True
+    for token in (
+        "MODULENOTFOUNDERROR",
+        "IMPORTERROR",
+        "SYNTAXERROR",
+        "INDENTATIONERROR",
+        "NAMEERROR",
+        "ATTRIBUTEERROR",
+        "TYPEERROR",
+        "VALUEERROR",
+        "ZERODIVISIONERROR",
+        "KEYERROR",
+        "INDEXERROR",
+        "RUNTIMEERROR",
+        "MEMORYERROR",
+        "TIMEOUT",
+        "MEMORYLIMITEXCEEDED",
+    ):
+        if token in up:
+            return True
+
+    # LLM / model load failure signals that often contain stray numbers (e.g. "32-bit").
+    if "MODEL FAILED" in up or "32-BIT" in up:
+        return True
+    if up.startswith("ERROR:"):
+        return True
+
+    return False
+
 def assess_complexity(problem: str) -> int:
     """Compute a heuristic complexity score combining semantic and structural signals.
     Score components (integer, additive):
@@ -300,6 +352,13 @@ def extract_final_answer_from_output(output: str) -> str:
         return "ERROR: EmptyOutput"
     if output.startswith("Error:"):
         return output.strip()
+    # If the program printed a JSON object/array (e.g., node assignment for a puzzle),
+    # keep it intact instead of extracting a trailing number token.
+    s0 = output.strip()
+    if (s0.startswith("{") and s0.endswith("}")) or (s0.startswith("[") and s0.endswith("]")):
+        # Heuristic: treat as answer payload when it looks like a node->int map.
+        if ("\"V1\"" in s0 or "\"I1\"" in s0) or ("'V1'" in s0 or "'I1'" in s0):
+            return s0
     # 모델 로드 실패 등으로 실행된 에러 메시지에서 숫자(예: 32-bit의 32)가 추출되지 않도록
     out_upper = output.upper()
     if "ERROR" in out_upper or "MODEL FAILED" in out_upper or "32-BIT" in out_upper:

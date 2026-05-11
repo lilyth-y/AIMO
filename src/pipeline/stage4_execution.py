@@ -279,6 +279,12 @@ class CodeExecutor:
         lines = code.splitlines()
         changed = False
 
+        # Many puzzle-style solutions print JSON; ensure json is always available.
+        # This is intentionally safe: importing json has no side effects and is lightweight.
+        joined0 = "\n".join(lines)
+        if not re.search(r"(?m)^\s*(import\s+json|from\s+json\s+import)\b", joined0):
+            lines = ["import json"] + lines
+
         def _rewrite_sympy_from_import(names: str, symbol: str) -> Optional[str]:
             # Remove `symbol` from a comma-separated import list. Return new line or None to delete.
             parts = [p.strip() for p in names.split(",") if p.strip()]
@@ -310,6 +316,13 @@ class CodeExecutor:
                     changed = True
                     continue
             new_lines.append(ln)
+
+        # If code references json.* but forgot to import json, add it.
+        joined_after = "\n".join(new_lines)
+        if ("json." in joined_after or re.search(r"\bjson\s*\.", joined_after)) and not re.search(
+            r"(?m)^\s*(import\s+json|from\s+json\s+import)\b", joined_after
+        ):
+            new_lines = ["import json"] + new_lines
 
         if changed:
             # Provide small shims if code referenced these names.
@@ -370,7 +383,12 @@ class CodeExecutor:
         except Exception as e:
             logger.debug(f"Error terminating process: {e}")
 
-    def execute_with_stats(self, code: str) -> Tuple[str, Dict[str, Any]]:
+    def execute_with_stats(
+        self,
+        code: str,
+        add_trace: Optional[Any] = None,
+        **_kwargs: Any,
+    ) -> Tuple[str, Dict[str, Any]]:
         """
         코드를 실행하고 리소스 사용 통계와 함께 결과를 반환합니다.
         
@@ -380,6 +398,7 @@ class CodeExecutor:
         Returns:
             (실행 결과, 리소스 통계 딕셔너리)
         """
+        _ = (add_trace, _kwargs)
         code = self._normalize_code_for_execution(code)
         static_err = self._basic_static_check(code)
         if static_err:

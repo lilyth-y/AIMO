@@ -161,6 +161,15 @@ class Settings:
         """Stage1에서 LLM 분류 1회 호출 여부 (기본 False)"""
         return os.getenv("AIMO_USE_LLM_STAGE1_CLASSIFIER", "0") == "1"
 
+    @property
+    def use_knowledge_ground(self) -> bool:
+        """
+        Stage2 선행 지식 블록을 코드 생성 프롬프트에 넣을지 (기본 True).
+        끄려면 ``OMI_DISABLE_KNOWLEDGE_GROUND=1`` (또는 ``true``/``yes``).
+        """
+        raw = os.getenv("OMI_DISABLE_KNOWLEDGE_GROUND", "").strip().lower()
+        return raw not in ("1", "true", "yes", "on")
+
     def validate(self) -> list[str]:
         """
         설정을 검증하고 문제가 있으면 경고 리스트를 반환합니다.

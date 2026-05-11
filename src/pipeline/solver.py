@@ -507,6 +507,14 @@ class Solver:
             None  # stores structured reasoning when used
         )
         self.last_syntax_error: bool = False
+        self._knowledge_ground: Optional[str] = None  # stage2 retrieval → prompt injection
+
+    def set_knowledge_ground(self, text: Optional[str]) -> None:
+        """Orchestrator sets this after stage2 ``KnowledgeGroundRetriever.retrieve``."""
+        if text and str(text).strip():
+            self._knowledge_ground = str(text).strip()
+        else:
+            self._knowledge_ground = None
 
     def generate_code(self, problem_text: str, strategy: str) -> str:
         """Constructs prompt(s) and gets code from the LLM.
@@ -687,14 +695,22 @@ class Solver:
                 + "\n".join(f"- {lemma}" for lemma in lemma_snippets)
                 + "\n\n"
             )
+        knowledge_block = ""
+        kg = getattr(self, "_knowledge_ground", None)
+        if kg:
+            knowledge_block = (
+                "### Prior knowledge (stage2 retrieval / ground)\n"
+                + kg
+                + "\n\n"
+            )
         if reasoning_text:
             prompt = (
                 f"Structured reasoning (reference only):\n{reasoning_text}\n\n"
-                f"{lemma_block}{base_instruction}\nProblem: {problem_text}\n\nCode:"
+                f"{knowledge_block}{lemma_block}{base_instruction}\nProblem: {problem_text}\n\nCode:"
             )
         else:
             prompt = (
-                f"{lemma_block}{base_instruction}\nProblem: {problem_text}\n\nCode:"
+                f"{knowledge_block}{lemma_block}{base_instruction}\nProblem: {problem_text}\n\nCode:"
             )
         return prompt
 
