@@ -15,7 +15,14 @@
   base: mode === 'production' ? '/AIMO/' : '/',
   ```
 
-### B. 파일 가져오기(Fetch) 경로 동적화
+### B. React Router Basename 설정 (`dashboard/src/main.tsx`)
+* **설정**: GitHub Pages의 서브디렉터리 호스팅 구조 하에서 React Router가 정상 작동하고 빈 화면(Blank)이나 404가 발생하지 않도록 `<BrowserRouter>`에 `basename` 속성을 추가했습니다.
+* **코드 내용**:
+  ```typescript
+  <BrowserRouter basename={import.meta.env.BASE_URL}>
+  ```
+
+### C. 파일 가져오기(Fetch) 경로 동적화
 컴파일 타임에 번들링되지 않는 정적 파일(예: balanced 데이터셋 JSON, 모델 결과 JSON 등)들을 올바른 서브폴더에서 가져올 수 있도록 모든 API fetch 호출 앞에 `import.meta.env.BASE_URL`을 접두사로 붙였습니다.
 * **적용 파일**:
   * [Accuracy.tsx](file:///c:/startingup/AIMO/dashboard/src/pages/Accuracy.tsx) (`/results/numina_balanced_results.json`)
@@ -23,10 +30,10 @@
   * [ProblemViewer.tsx](file:///c:/startingup/AIMO/dashboard/src/pages/ProblemViewer.tsx) (`/numina_eval_balanced.json`, `/numina_5k.json`, 결과 데이터 등)
   * [Process.tsx](file:///c:/startingup/AIMO/dashboard/src/pages/Process.tsx) (`/numina_eval_balanced.json`, `/eval_data.json`)
 
-### C. Live AI 연동 엔드포인트 동적화 (`dashboard/src/pages/LiveSolve.tsx`)
+### D. Live AI 연동 엔드포인트 동적화 (`dashboard/src/pages/LiveSolve.tsx`)
 * **설정**: 실시간 LLM 추론 연동(`LiveSolve`) 시 고정된 로컬 주소(`/api/solve/stream`) 대신 환경 변수 `import.meta.env.VITE_API_URL`을 주입받아 동적으로 외부의 FastAPI 서버 주소를 바라볼 수 있도록 개선했습니다. (로컬 개발 환경에서는 기존 프록시로 동작하도록 폴백 유지)
 
-### D. GitHub Actions 자동화 워크플로우 추가 (`.github/workflows/deploy-dashboard.yml`)
+### E. GitHub Actions 자동화 워크플로우 추가 (`.github/workflows/deploy-dashboard.yml`)
 * **동작**: `changes` 혹은 `master` 브랜치에 코드가 push되거나, 수동으로 Actions를 구동(`workflow_dispatch`)하면 자동으로 Node.js 환경에서 의존성을 설치하고 대시보드를 빌드하여 `gh-pages` 브랜치에 배포합니다.
 
 ---
