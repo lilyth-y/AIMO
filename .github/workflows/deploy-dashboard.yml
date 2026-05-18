@@ -25,6 +25,8 @@ jobs:
           cache-dependency-path: dashboard/package-lock.json
 
       - name: Install and Build 🔧
+        env:
+          VITE_API_URL: https://aimo-api-118689443638.us-central1.run.app
         run: |
           cd dashboard
           npm ci
