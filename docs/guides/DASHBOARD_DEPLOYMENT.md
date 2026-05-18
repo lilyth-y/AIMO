@@ -30,8 +30,12 @@
   * [ProblemViewer.tsx](file:///c:/startingup/AIMO/dashboard/src/pages/ProblemViewer.tsx) (`/numina_eval_balanced.json`, `/numina_5k.json`, 결과 데이터 등)
   * [Process.tsx](file:///c:/startingup/AIMO/dashboard/src/pages/Process.tsx) (`/numina_eval_balanced.json`, `/eval_data.json`)
 
-### D. Live AI 연동 엔드포인트 동적화 (`dashboard/src/pages/LiveSolve.tsx`)
+### D. Live AI 연동 엔드포인트 동적화 및 배포 (`dashboard/src/pages/LiveSolve.tsx`)
 * **설정**: 실시간 LLM 추론 연동(`LiveSolve`) 시 고정된 로컬 주소(`/api/solve/stream`) 대신 환경 변수 `import.meta.env.VITE_API_URL`을 주입받아 동적으로 외부의 FastAPI 서버 주소를 바라볼 수 있도록 개선했습니다. (로컬 개발 환경에서는 기존 프록시로 동작하도록 폴백 유지)
+* **백엔드 실 서버 배포 완료**: Google Cloud Run에 해당 FastAPI 백엔드를 빌드하여 성공적으로 호스팅 완료했습니다!
+  * **API 주소**: `https://aimo-api-118689443638.us-central1.run.app`
+  * **CORS 설정**: 외부 사이트(GitHub Pages)에서 브라우저 보안 에러 없이 스트리밍(SSE) API를 호출할 수 있도록 FastAPI 백엔드(`src/service/cloud_run_api.py`)에 CORS 미들웨어를 정상적으로 구성 완료했습니다.
+  * **자동 주입**: GitHub Actions 배포 워크플로우에 해당 실 서버 주소를 `VITE_API_URL` 환경 변수로 주입되도록 명시해 두었으므로, 배포된 웹사이트에서 실시간 라이브 시뮬레이션을 원클릭으로 바로 연동해 동작시킬 수 있습니다.
 
 ### E. GitHub Actions 자동화 워크플로우 추가 (`.github/workflows/deploy-dashboard.yml`)
 * **동작**: `changes` 혹은 `master` 브랜치에 코드가 push되거나, 수동으로 Actions를 구동(`workflow_dispatch`)하면 자동으로 Node.js 환경에서 의존성을 설치하고 대시보드를 빌드하여 `gh-pages` 브랜치에 배포합니다.
