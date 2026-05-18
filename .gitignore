@@ -43,8 +43,6 @@ evaluation_output.txt
 !dashboard/package.json
 !dashboard/package-lock.json
 !dashboard/tsconfig.json
-!dashboard/public/**/*.json
-!dashboard/public/results/*.json
 *.jsonl
 !data/eval/trusted_subset_seed.jsonl
 logs/
@@ -82,3 +80,8 @@ venv_transformers*/
 # Node dependencies
 node_modules/
 dashboard/node_modules/
+
+# Ensure dashboard public datasets are tracked
+!dashboard/public/**/*.json
+!dashboard/public/results/
+!dashboard/public/results/*.json

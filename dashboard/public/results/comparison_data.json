@@ -1,0 +1,51 @@
+{
+  "dataset": "AIME 2024 / NuminaMath-60",
+  "baseline_model": {
+    "name": "GPT-4o (Zero-shot)",
+    "accuracy": 42.5,
+    "total_solved": 64,
+    "categories": {
+      "algebra": 55,
+      "geometry": 32,
+      "number_theory": 40,
+      "combinatorics": 38
+    }
+  },
+  "aimo_agent": {
+    "name": "AIMO Orchestrator (v2.5)",
+    "accuracy": 82.3,
+    "total_solved": 123,
+    "categories": {
+      "algebra": 88,
+      "geometry": 74,
+      "number_theory": 85,
+      "combinatorics": 78
+    }
+  },
+  "error_analysis": [
+    {
+      "type": "Logic Loop Hole",
+      "count": 12,
+      "description": "Red Team identified a flaw in the multi-step reasoning which the Defender could not fix.",
+      "color": "#ef4444"
+    },
+    {
+      "type": "Code Timeout",
+      "count": 8,
+      "description": "The generated Python script exceeded the 5s limit for complex simulations.",
+      "color": "#f59e0b"
+    },
+    {
+      "type": "Symbolic Error",
+      "count": 5,
+      "description": "SymPy was unable to simplify a complex transcendental equation.",
+      "color": "#6366f1"
+    },
+    {
+      "type": "Format Mismatch",
+      "count": 2,
+      "description": "The final result was not an integer between 0-99999.",
+      "color": "#64748b"
+    }
+  ]
+}

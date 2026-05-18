@@ -1,0 +1,16 @@
+{
+  "dataset": "Balanced NuminaMath-1.5",
+  "timestamp": "2026-05-14T17:25:00Z",
+  "results": [
+    { "id": 1, "is_correct": true },
+    { "id": 2, "is_correct": true },
+    { "id": 3, "is_correct": false },
+    { "id": 4, "is_correct": true },
+    { "id": 5, "is_correct": true },
+    { "id": 6, "is_correct": true },
+    { "id": 7, "is_correct": false },
+    { "id": 8, "is_correct": true },
+    { "id": 9, "is_correct": true },
+    { "id": 10, "is_correct": true }
+  ]
+}
