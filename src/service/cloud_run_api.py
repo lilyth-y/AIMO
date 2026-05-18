@@ -29,7 +29,18 @@ class SolveRequest(BaseModel):
     node_groups: Optional[Dict[str, list[str]]] = None
 
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(title="AIMO Cloud Run API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 _orchestrator = PipelineOrchestrator()
 _analyzer = ProblemAnalyzer()
 
