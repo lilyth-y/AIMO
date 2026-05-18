@@ -76,3 +76,7 @@ fix_*.py
 # Local experiment sandboxes (do not commit)
 tmp_vertex_smoke_*/
 venv_transformers*/
+
+# Node dependencies
+node_modules/
+dashboard/node_modules/

@@ -10,6 +10,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      AIMO_FAST_TEST: 1
     strategy:
       matrix:
         python-version: ['3.10', '3.11']
