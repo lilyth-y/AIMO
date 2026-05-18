@@ -26,7 +26,7 @@ jobs:
 
       - name: Install and Build 🔧
         env:
-          VITE_API_URL: https://aimo-api-118689443638.us-central1.run.app
+          VITE_API_URL: https://aimo-api-118689443638.asia-northeast3.run.app
         run: |
           cd dashboard
           npm ci
