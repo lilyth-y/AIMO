@@ -43,6 +43,8 @@ evaluation_output.txt
 !dashboard/package.json
 !dashboard/package-lock.json
 !dashboard/tsconfig.json
+!dashboard/public/**/*.json
+!dashboard/public/results/*.json
 *.jsonl
 !data/eval/trusted_subset_seed.jsonl
 logs/

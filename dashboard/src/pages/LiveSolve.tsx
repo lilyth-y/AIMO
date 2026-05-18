@@ -53,7 +53,8 @@ export default function LiveSolve() {
     const apiPrefix = apiBase.endsWith('/') ? apiBase.slice(0, -1) : apiBase;
 
     try {
-      const response = await fetch(`${apiPrefix}/api/solve/stream`, {
+      const requestUrl = apiPrefix ? `${apiPrefix}/solve/stream` : '/api/solve/stream';
+      const response = await fetch(requestUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ problem_text: problem, time_budget: 60.0 }),
