@@ -85,3 +85,6 @@ dashboard/node_modules/
 !dashboard/public/**/*.json
 !dashboard/public/results/
 !dashboard/public/results/*.json
+
+# Track GCP Artifact Registry cleanup policies config
+!scripts/artifacts_cleanup_policy.json
