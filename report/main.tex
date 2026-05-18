@@ -1,0 +1,74 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{kotex}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{setspace}
+
+\geometry{margin=1.2in}
+\setstretch{1.6} % 넉넉한 줄간격으로 분량 확보 및 가독성 향상
+
+% 들여쓰기 및 문단 설정
+\usepackage{indentfirst} % 첫 단락 들여쓰기 강제 적용
+\setlength{\parindent}{1.5em} % 문단 들여쓰기를 1.5em으로 고정
+\setlength{\parskip}{0pt} % 문단 간 격차는 0으로 유지하여 들여쓰기의 시각적 일관성 유지
+
+% TikZ 그리기 패키지 로드
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, shadows, calc}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+\title{\Huge\textbf{OMI (Orchestrated Math Interpreter)} \\ \vspace{0.8cm} \Large 5단계 심층 추론 및 역공학 데이터셋 기반의 \\ 고도화된 AI 수학 튜터 시스템 종합 연구 보고서}
+\author{\textbf{AIMO Project Research Team}}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\input{00_Abstract.tex}
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+\input{01_Introduction.tex}
+\newpage
+\input{02_Related_Work.tex}
+\newpage
+\input{03_Methodology.tex}
+\newpage
+\input{04_System_Implementation.tex}
+\newpage
+\input{05_Conclusion.tex}
+
+\end{document}

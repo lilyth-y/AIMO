@@ -1,0 +1,9 @@
+\contentsline {section}{\numberline {1}Introduction (서론)}{2}{section.1}%
+\contentsline {section}{\numberline {2}Related Work: AI는 왜 수학을 못할까? (관련 연구 및 배경)}{2}{section.2}%
+\contentsline {section}{\numberline {3}Proposed Methodology (제안하는 방법론: 왜 이렇게 설계했는가?)}{2}{section.3}%
+\contentsline {subsection}{\numberline {3.1}5-Stage Deep Reasoning Pipeline의 구체적 원리}{2}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}역공학(Reverse Engineering) 기반 합성 데이터 엔진}{3}{subsection.3.2}%
+\contentsline {section}{\numberline {4}System Implementation (시스템 구현 및 대시보드 시각화)}{3}{section.4}%
+\contentsline {subsection}{\numberline {4.1}XAI(설명 가능한 AI)와 대시보드 구동 시나리오}{4}{subsection.4.1}%
+\contentsline {section}{\numberline {5}Conclusion (결론)}{4}{section.5}%
+\contentsline {section}{\numberline {6}Appendix: 친절한 용어 사전 (Glossary)}{4}{section.6}%

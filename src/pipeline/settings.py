@@ -8,8 +8,12 @@
 import os
 from typing import Optional
 from pathlib import Path
+from dotenv import load_dotenv
 
 from .executor_env import executor_wall_seconds_from_env
+
+# .env 파일 로드 (최상위 디렉토리 기준)
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 
 class Settings:

@@ -6,6 +6,7 @@ Run with:
 
 from __future__ import annotations
 
+import datetime
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI
@@ -177,4 +178,71 @@ def solve(req: SolveRequest) -> Dict[str, Any]:
         "variables": safe_variables,
         "result": result,
     }
+
+
+import json
+import asyncio
+import queue
+import threading
+from fastapi.responses import StreamingResponse
+
+@app.post("/solve/stream")
+async def solve_stream(req: SolveRequest):
+    """
+    Streaming version of /solve that sends pipeline trace updates in real-time via SSE.
+    """
+    q = queue.Queue()
+
+    def trace_callback(item):
+        q.put({"type": "trace", "data": item})
+
+    def run_pipeline():
+        try:
+            domain = req.domain or _analyzer.classify_domain(req.problem_text)
+            variables = req.variables or _analyzer.extract_variables(req.problem_text)
+            
+            # Deterministic fast-path check (simplified for streaming wrapper)
+            inferred_groups = req.node_groups or _deterministic_node_groups_from_text(req.problem_text)
+            if inferred_groups:
+                 # If we have a fast path, we still want to simulate some trace for the UI
+                 trace_callback({"stage": "Deterministic Fast-path", "status": "processing", "timestamp": datetime.datetime.now().isoformat()})
+            
+            result = _orchestrator.solve_problem(
+                domain=domain,
+                variables=variables,
+                problem_text=req.problem_text,
+                time_budget=req.time_budget,
+                trace_callback=trace_callback
+            )
+            
+            safe_variables = {k: v for k, v in variables.items() if not callable(v)}
+            final_payload = {
+                "domain": domain,
+                "variables": safe_variables,
+                "result": result,
+            }
+            q.put({"type": "final", "data": final_payload})
+        except Exception as e:
+            q.put({"type": "error", "data": str(e)})
+        finally:
+            q.put(None) # Sentinel
+
+    # Run orchestrator in a separate thread to avoid blocking the event loop
+    threading.Thread(target=run_pipeline, daemon=True).start()
+
+    async def event_generator():
+        while True:
+            # Non-blocking check of the queue
+            try:
+                msg = await asyncio.get_event_loop().run_in_executor(None, lambda: q.get(timeout=0.1))
+                if msg is None:
+                    break
+                yield f"data: {json.dumps(msg)}\n\n"
+            except queue.Empty:
+                # Keep connection alive with a heartbeat if needed, 
+                # or just yield nothing and wait
+                await asyncio.sleep(0.1)
+                continue
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 

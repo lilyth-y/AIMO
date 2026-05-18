@@ -21,11 +21,16 @@ export default function ProblemViewer() {
   const [problems, setProblems] = useState<Problem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'correct' | 'incorrect'>('all')
+  const [dataset, setDataset] = useState<'balanced' | '5k'>('balanced')
 
   useEffect(() => {
+    setLoading(true)
+    const dataPath = dataset === 'balanced' ? `${import.meta.env.BASE_URL}numina_eval_balanced.json` : `${import.meta.env.BASE_URL}numina_5k.json`
+    const resultsPath = dataset === 'balanced' ? `${import.meta.env.BASE_URL}results/numina_balanced_results.json` : `${import.meta.env.BASE_URL}results/numina_5k_results.json`
+
     Promise.all([
-      fetch('/numina_eval_balanced.json').then(res => res.json()),
-      fetch('/results/numina_balanced_results.json').then(res => res.json()).catch(() => ({ results: [] }))
+      fetch(dataPath).then(res => res.json()),
+      fetch(resultsPath).then(res => res.json()).catch(() => ({ results: [] }))
     ]).then(([problemsData, resultsData]) => {
       // Map results to problems
       const mappedProblems = problemsData.map((p: any, idx: number) => {
@@ -39,9 +44,10 @@ export default function ProblemViewer() {
       setLoading(false)
     }).catch(err => {
       console.error('Failed to load problems or results:', err)
+      setProblems([]) // Ensure list is cleared on error
       setLoading(false)
     })
-  }, [])
+  }, [dataset])
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[400px]">
@@ -50,8 +56,19 @@ export default function ProblemViewer() {
   )
 
   if (problems.length === 0) return (
-    <div className="glass p-8 rounded-3xl border-rose-500/20 text-rose-400 text-center">
-      문제를 불러올 수 없습니다.
+    <div className="glass p-12 rounded-3xl border-rose-500/20 text-center space-y-6">
+      <div className="text-rose-400 font-bold text-lg italic">
+        문제를 불러올 수 없습니다.
+      </div>
+      <p className="text-slate-500 text-sm max-w-md mx-auto">
+        데이터 파일(/numina_5k.json)을 로드하는 중 오류가 발생했거나 파일이 비어있습니다. 백엔드 서비스와 정적 파일 경로를 확인해주세요.
+      </p>
+      <button
+        onClick={() => window.location.reload()}
+        className="px-6 py-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white border border-white/5 transition-colors"
+      >
+        새로고침
+      </button>
     </div>
   )
 
@@ -62,30 +79,50 @@ export default function ProblemViewer() {
           Problem <span className="text-gradient">Explorer</span>
         </h1>
         <p className="text-lg text-slate-400 max-w-2xl leading-relaxed">
-          NuminaMath-1.5 데이터셋에서 추출된 밸런스드 평가 세트입니다. 총 <span className="text-cyan-400 font-bold">{problems.length}</span>개의 문제가 포함되어 있습니다.
+          NuminaMath-1.5 데이터셋에서 추출된 정선된 평가 세트입니다.
+          현재 대시보드 성능을 위해 <span className="text-cyan-400 font-bold">5,000개</span> 규모의 서브셋이 로드되어 있습니다.
+          (전체 데이터셋: ~900,000개)
         </p>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2 p-1.5 glass w-fit rounded-2xl border-white/5">
-        <button
-          onClick={() => setFilter('all')}
-          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${filter === 'all' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
-        >
-          All
-        </button>
-        <button
-          onClick={() => setFilter('correct')}
-          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${filter === 'correct' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-emerald-400/70 hover:bg-emerald-500/10'}`}
-        >
-          Correct
-        </button>
-        <button
-          onClick={() => setFilter('incorrect')}
-          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${filter === 'incorrect' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-rose-400/70 hover:bg-rose-500/10'}`}
-        >
-          Incorrect
-        </button>
+      <div className="flex flex-wrap gap-4 items-center justify-between">
+        {/* Filters */}
+        <div className="flex gap-2 p-1.5 glass w-fit rounded-2xl border-white/5">
+          <button
+            onClick={() => setFilter('all')}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${filter === 'all' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setFilter('correct')}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${filter === 'correct' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-emerald-400/70 hover:bg-emerald-500/10'}`}
+          >
+            Correct
+          </button>
+          <button
+            onClick={() => setFilter('incorrect')}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${filter === 'incorrect' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-rose-400/70 hover:bg-rose-500/10'}`}
+          >
+            Incorrect
+          </button>
+        </div>
+
+        {/* Dataset Switcher */}
+        <div className="flex gap-2 p-1.5 glass w-fit rounded-2xl border-white/5">
+          <button
+            onClick={() => setDataset('balanced')}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${dataset === 'balanced' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-slate-400 hover:text-cyan-400/70 hover:bg-white/5'}`}
+          >
+            Balanced (60)
+          </button>
+          <button
+            onClick={() => setDataset('5k')}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${dataset === '5k' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-slate-400 hover:text-cyan-400/70 hover:bg-white/5'}`}
+          >
+            Training 5K
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-8">

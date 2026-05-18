@@ -131,12 +131,12 @@ export default function Process() {
   const [selectedEvalIdx, setSelectedEvalIdx] = useState(0)
 
   useEffect(() => {
-    fetch('/numina_eval_balanced.json')
+    fetch(`${import.meta.env.BASE_URL}numina_eval_balanced.json`)
       .then(r => r.json())
       .then(d => setProblems(d))
       .catch(() => { })
 
-    fetch('/eval_data.json')
+    fetch(`${import.meta.env.BASE_URL}eval_data.json`)
       .then(r => r.json())
       .then(d => setEvalData(d))
       .catch(() => { })

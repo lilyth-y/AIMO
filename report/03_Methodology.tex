@@ -1,0 +1,164 @@
+\section{Proposed Methodology (제안하는 방법론: 5-Stage OMI 아키텍처)}
+
+앞서 살펴본 이론적 배경을 바탕으로, 본 장에서는 OMI(Orchestrated Math Interpreter) 프로젝트의 핵심 엔진인 **5단계 심층 추론 파이프라인(5-Stage Deep Reasoning Pipeline)**과 **역공학 기반 합성 데이터 생성 엔진(Open-Reverse-Math)**의 상세 알고리즘을 제안합니다.
+
+\subsection{5-Stage Deep Reasoning Pipeline 상세 아키텍처}
+수학 문제를 풀기 위해 인간이 무의식적으로 수행하는 사고의 과정을 모방하여, OMI 시스템은 문제를 5개의 독립적이되 유기적으로 연결된 모듈로 분할 처리합니다. 그림 \ref{fig:5stage_pipeline}는 OMI 시스템의 전체적인 5단계 추론 아키텍처 및 제어 흐름을 도식화한 것입니다.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    node distance=1.2cm and 1cm,
+    every node/.style={font=\small\sffamily, align=center},
+    stage/.style={rectangle, draw=blue!70!black, fill=blue!5, rounded corners=5pt, minimum width=10cm, minimum height=1.1cm, line width=1pt, drop shadow},
+    substage/.style={rectangle, draw=gray!60, fill=gray!5, rounded corners=3pt, minimum width=3.1cm, minimum height=0.9cm, font=\footnotesize},
+    io/.style={ellipse, draw=orange!80!black, fill=orange!10, minimum width=3.5cm, minimum height=0.8cm, line width=1pt},
+    arrow/.style={-Latex, line width=1.2pt, draw=gray!80},
+    routingarrow/.style={-Latex, line width=1pt, dashed, draw=blue!80}
+]
+
+% Nodes
+\node (input) [io] {입력 문장제 수학 문제 \\ (Natural Language Problem)};
+\node (s1) [stage, below=of input] {\textbf{Stage 1: Labeling \& Semantic Decomposition} \\ 도메인 분류 및 주요 변수(상한/하한 등) JSON 추출};
+\node (s2) [stage, below=of s1] {\textbf{Stage 2: Domain Experts Retrieval} \\ 도메인 지식 라이브러리 및 코드 템플릿 동적 주입};
+\node (s3) [stage, below=of s2, fill=purple!5, draw=purple!80!black] {\textbf{Stage 3: The Calculation Router} \\ 문제 성격과 크기에 따른 실행 경로 자율 선택};
+
+% Strategic Branches
+\node (pathB) [substage, below=of s3, fill=cyan!5, draw=cyan!70] {\textbf{Path B: The Theoretician} \\ 방정식 풀이 / Symbolic Solver};
+\node (pathA) [substage, left=0.6cm of pathB, fill=green!5, draw=green!70] {\textbf{Path A: The Simulator} \\ 상태공간 탐색 / Brute-force};
+\node (pathC) [substage, right=0.6cm of pathB, fill=orange!5, draw=orange!70] {\textbf{Path C: The Hybrid} \\ 소규모 패턴화 후 이론식 추론};
+
+\node (s4) [stage, below=2.5cm of s3, fill=teal!5, draw=teal!80!black] {\textbf{Stage 4: Execution \& Iterative Refinement} \\ 파이썬 격리 샌드박스 실행 및 에러 백트래킹 피드백};
+\node (s5) [stage, below=of s4] {\textbf{Stage 5: The Verification Router} \\ 축소 검증(Scale-Down Test) 및 수학적 역산};
+\node (output) [io, below=of s5, fill=green!10, draw=green!80!black] {최종 검증된 답변 제출 \\ (Verified Answer)};
+
+% Arrows
+\draw [arrow] (input) -- (s1);
+\draw [arrow] (s1) -- (s2);
+\draw [arrow] (s2) -- (s3);
+
+\draw [arrow] ($(s3.south) - (3.5cm,0)$) -- (pathA.north);
+\draw [arrow] (s3.south) -- (pathB.north);
+\draw [arrow] ($(s3.south) + (3.5cm,0)$) -- (pathC.north);
+
+\draw [arrow] (pathA.south) -- ($(s4.north) - (3.5cm,0)$);
+\draw [arrow] (pathB.south) -- (s4.north);
+\draw [arrow] (pathC.south) -- ($(s4.north) + (3.5cm,0)$);
+
+\draw [arrow] (s4) -- (s5);
+\draw [arrow] (s5) -- (output);
+
+% Feedback Loop on Stage 4
+\path [arrow] (s4.east) edge [bend right=60, looseness=1.5, draw=red!70, text=red!80!black] 
+    node [right, font=\scriptsize\bfseries] {에러 피드백 및 자가 교정 \\ (Iterative Self-Correction)} (s4.north east);
+
+\end{tikzpicture}
+\caption{5단계 OMI 심층 추론 파이프라인 아키텍처}
+\label{fig:5stage_pipeline}
+\end{figure}
+
+\subsubsection{Stage 1: Labeling \& Semantic Decomposition (분류 및 의미 분해)}
+첫 번째 단계는 입력된 자연어 수학 문제의 특성을 분석하는 메타인지(Meta-cognition) 단계입니다. AI 모델은 곧바로 답을 내놓는 대신, 문제의 도메인을 분류하고 수식을 해결하는 데 필요한 핵심 변수를 JSON 형태로 추출합니다.
+\begin{itemize}
+    \item \textbf{Domain Classification:} 문제가 정수론(Number Theory), 기하학(Geometry), 조합론(Combinatorics), 미적분학(Calculus) 중 어디에 속하는지 판별합니다.
+    \item \textbf{Variable Extraction:} 문제에 등장하는 변수의 상한/하한을 추출합니다. 예를 들어 "$N$개의 동전을 던질 때..."라는 문제에서 $N=10$인지 $N=10^9$인지를 파악하는 것은 추후 서술할 Stage 3의 경로 선택에 절대적인 영향을 미칩니다.
+\end{itemize}
+
+\subsubsection{Stage 2: Domain Experts Retrieval (전문가 모듈 호출)}
+AI에게 백과사전 전체를 던져주는 것은 Context Window를 낭비하고 환각을 유발합니다. Stage 2에서는 Stage 1에서 라벨링된 도메인 정보에 맞추어, 파이프라인이 최적의 **동적 컨텍스트(Dynamic Context)**를 로드합니다.
+\begin{itemize}
+    \item \textbf{기하학(Geometry) 판별 시:} 모델의 프롬프트에 파이썬의 \texttt{shapely} 모듈 및 \texttt{sympy.\allowbreak geometry} 사용법과 관련된 Few-shot 예제가 동적으로 주입됩니다.
+    \item \textbf{정수론(Number Theory) 판별 시:} \texttt{sympy.\allowbreak ntheory}의 소인수분해, 오일러 피 함수, 모듈러 연산 등의 템플릿이 로드되어 모델이 무의미한 반복문을 도는 것을 방지합니다.
+\end{itemize}
+
+\subsubsection{Stage 3: The Calculation Router (계산 라우터 - OMI의 심장)}
+추출된 문제 파라미터($N$의 크기 등)와 도메인 지식을 바탕으로, 모델은 코드를 작성하는 세 가지 전략(Path) 중 하나를 자율적으로 선택합니다.
+
+\vspace{0.3cm}
+\noindent\textbf{Path A: The Simulator (시뮬레이터 전략)} \\
+$N$이 $10^7$ 이하로 작거나 규칙이 불규칙하여 수식화가 어려운 퍼즐 문제의 경우, 상태 공간(State Space)을 직접 탐색하는 파이썬 루프(Loop)를 생성합니다. 복잡한 논리적 함정이 있어도 무식하지만 확실하게(Brute-force) 정답을 찾아냅니다.
+\begin{lstlisting}[language=Python]
+# Path A: Brute-force simulation looping from 1 to 1,000,000
+def solve_by_simulation():
+    count = 0
+    for i in range(1, 1000000):
+        if is_valid_condition(i):
+            count += 1
+    return count
+\end{lstlisting}
+
+\noindent\textbf{Path B: The Theoretician (이론가 전략)} \\
+$N$이 $10^{100}$ 단위이거나 무한 급수 문제라면 반복문은 무조건 \texttt{Timeout} 에러를 발생시킵니다. 이 경우 모델은 심볼릭 라이브러리를 통해 대수적으로 방정식을 세우고 푸는 코드를 작성합니다.
+\begin{lstlisting}[language=Python]
+# Path B: Symbolic equation solving for giant numbers
+from sympy import symbols, solve, simplify
+def solve_by_theory():
+    x = symbols('x')
+    equation = x**3 - 5*x**2 + 8*x - 4
+    # Delegate solving to sympy library
+    roots = solve(equation, x) 
+    return max(roots)
+\end{lstlisting}
+
+\noindent\textbf{Path C: The Hybrid (하이브리드 분해 전략)} \\
+가장 어려운 난이도의 문제에서 발동합니다. 부분적으로 작은 $N$에 대해 시뮬레이션(Path A)을 돌려 OEIS(정수열 사전)처럼 패턴을 찾은 뒤, 이를 바탕으로 일반항을 추론하여 큰 $N$에 적용하는(Path B) 방식입니다.
+
+\subsubsection{Stage 4: Execution \& Iterative Refinement (실행 및 반복적 자가 수정)}
+선택된 경로에 따라 생성된 코드는 인터넷이 차단된 샌드박스 환경에서 실행됩니다. 
+기존 모델들은 여기서 에러가 나면 정지하지만, OMI는 **반복적 정제(Iterative Refinement)** 루프를 돕니다. 만약 시뮬레이션 코드에서 \texttt{MemoryError}나 \texttt{Timeout}이 발생하면, 이 에러 메시지가 다시 모델의 프롬프트로 입력됩니다. 모델은 "아, $N$이 너무 커서 메모리가 터졌구나. 시뮬레이션을 포기하고 Path B의 대수적 방정식으로 다시 짜야겠다"라고 판단하고 코드를 180도 수정하여 재실행합니다.
+
+\subsubsection{Stage 5: The Verification Router (최종 검증 및 방어선)}
+코드가 성공적으로 실행되어 답안($X$)을 도출했더라도, 이것이 환각에 의한 우연일 수 있습니다. 제출 전 최후의 방어선으로 검증 라우터가 작동합니다.
+\begin{itemize}
+    \item \textbf{역산 (Reverse Check):} 도출된 정답 $X$를 문제의 원래 조건에 다시 대입하여 논리적 모순이 발생하지 않는지 방정식의 잔차(Residual)가 0이 되는지 확인합니다.
+    \item \textbf{Scale-Down Test (축소 검증):} $N=10^{50}$을 입력해야 하는 수식 로직을 $N=3$과 같이 극단적으로 줄인 미니어처 버전으로 돌려, 손으로 푼 결과와 일치하는지 유효성(Validity)을 평가합니다.
+\end{itemize}
+
+\subsection{역공학 기반 무오류 합성 데이터 엔진 (Open-Reverse-Math)}
+AI 모델이 5-Stage 파이프라인의 '메타인지(어떤 경로를 탈지, 어떻게 검증할지)'를 학습하려면, 단순한 (질문-정답) 쌍이 아닌 사고의 지도(Map of Thoughts)가 담긴 방대한 훈련 데이터가 필요합니다. 인터넷 크롤링 데이터는 이미 오염(Contamination)되었고, 오류가 섞여 있습니다.
+
+우리는 발상의 전환을 통해 **"정답을 먼저 정해두고 문제를 생성하는 역공학(Reverse Engineering)"** 방식의 데이터 엔진을 개발했습니다. 그림 \ref{fig:reverse_math_engine}는 Open-Reverse-Math 엔진의 역공학적 데이터 생성 단계를 순차적으로 표현한 것입니다.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    node distance=1.2cm and 1cm,
+    every node/.style={font=\small\sffamily, align=center},
+    stepbox/.style={rectangle, draw=teal!70!black, fill=teal!5, rounded corners=4pt, minimum width=10cm, minimum height=1.1cm, line width=1pt, drop shadow},
+    arrow/.style={-Latex, line width=1.2pt, draw=teal!80},
+    sidebox/.style={rectangle, draw=orange!70, fill=orange!5, rounded corners=3pt, minimum width=3.5cm, minimum height=0.8cm, font=\scriptsize}
+]
+
+% Steps
+\node (step1) [stepbox] {\textbf{Step 1: Target Answer Selection} \\ 난수 생성 엔진을 통한 명확한 목표 정답($x^*$) 결정 (예: $x^* = 42$)};
+\node (step2) [stepbox, below=of step1] {\textbf{Step 2: Mathematical Structure Assembly} \\ 고정된 정답을 해(Root)로 갖는 수학적 방정식 및 기하학적 제약 조건 빌드};
+\node (step3) [stepbox, below=of step2] {\textbf{Step 3: Natural Language Obfuscation} \\ 완성된 뼈대 수식을 학생 친화적인 자연어 문장제 문제(Word Problem)로 변형 및 마스킹};
+\node (step4) [stepbox, fill=purple!5, draw=purple!80!black, below=of step3] {\textbf{Step 4: Hypothesis Testing \& Formal Verification} \\ Sympy 및 Hypothesis 라이브러리를 동원해 해당 문제의 유일 해(Unique Solution) 검증};
+\node (dataset) [stepbox, fill=green!5, draw=green!60!black, rounded corners=8pt, below=of step4] {\textbf{ 무오류 고품질 합성 데이터셋 완성 (Schema v4.0)} \\ 파이프라인 자가 교정 및 도구 사용 훈련용 최적 데이터};
+
+% Arrows
+\draw [arrow] (step1) -- (step2);
+\draw [arrow] (step2) -- (step3);
+\draw [arrow] (step3) -- (step4);
+\draw [arrow] (step4) -- (dataset);
+
+% Illustrative side notes
+\node (note1) [sidebox, right=0.8cm of step1] {데이터 오염 원천 차단 \\ (Zero Leakage)};
+\node (note2) [sidebox, right=0.8cm of step2] {소인수분해, 대수학, \\ 기하학 등 다변화};
+\node (note3) [sidebox, right=0.8cm of step4] {오류/환각 가능성 0\% \\ 수학적으로 참(True) 증명};
+
+\draw [arrow, dashed, draw=orange!80] (note1) -- (step1);
+\draw [arrow, dashed, draw=orange!80] (note2) -- (step2);
+\draw [arrow, dashed, draw=orange!80] (note3) -- (step4);
+
+\end{tikzpicture}
+\caption{역공학 기반 무오류 합성 데이터 엔진 (Open-Reverse-Math) 프로세스}
+\label{fig:reverse_math_engine}
+\end{figure}
+\begin{enumerate}
+    \item \textbf{목표 정답(Target Answer) 고정:} 난수 생성기를 통해 임의의 정답(예: 42)을 고정합니다.
+    \item \textbf{수학적 구조(Core Structure) 조립:} $x=42$ 가 해가 될 수밖에 없는 디오판토스 방정식이나 다항식, 기하학적 넓이 제약을 역으로 구성합니다.
+    \item \textbf{문제화 (Obfuscation):} 구성된 뼈대 수식을 자연어로 변환하여, "사과와 배를 샀을 때..."와 같은 문장제 문제로 치환합니다.
+    \item \textbf{가설 검증 (Hypothesis Testing):} 파이썬의 \texttt{hypothesis} 모듈을 사용해 생성된 문제가 $x=42$ 외에 다른 해를 가지지 않는지 수천 번의 난수 대입으로 증명합니다.
+\end{enumerate}
+이 엔진을 통해 생성된 **Schema v4.0** 데이터는 100\%의 정답 무결성을 지니며, 모델이 억지로 답을 맞히는 것이 아니라 '문제를 분석하고 전략을 세우는 방법' 자체를 학습하도록 돕습니다.

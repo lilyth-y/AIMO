@@ -4,6 +4,8 @@ import Accuracy from './pages/Accuracy'
 import Process from './pages/Process'
 import ProblemViewer from './pages/ProblemViewer'
 import Comparison from './pages/Comparison'
+import LiveSolve from './pages/LiveSolve'
+import Methodology from './pages/Methodology'
 
 function NavLink({ to, label }: { to: string; label: string }) {
   const location = useLocation()
@@ -37,10 +39,12 @@ function Layout({ children }: { children: React.ReactNode }) {
           </Link>
           <nav className="flex items-center gap-1 bg-slate-900/40 p-1 rounded-full border border-white/5">
             <NavLink to="/" label="개요" />
+            <NavLink to="/live" label="라이브 시뮬레이션" />
             <NavLink to="/accuracy" label="정확도" />
             <NavLink to="/process" label="풀이 과정" />
             <NavLink to="/problems" label="문제/수식" />
             <NavLink to="/comparison" label="비교/분석" />
+            <NavLink to="/methodology" label="활용 방법론" />
           </nav>
         </div>
       </header>
@@ -63,10 +67,12 @@ function App() {
     <Layout>
       <Routes>
         <Route path="/" element={<Overview />} />
+        <Route path="/live" element={<LiveSolve />} />
         <Route path="/accuracy" element={<Accuracy />} />
         <Route path="/process" element={<Process />} />
         <Route path="/problems" element={<ProblemViewer />} />
         <Route path="/comparison" element={<Comparison />} />
+        <Route path="/methodology" element={<Methodology />} />
       </Routes>
     </Layout>
   )

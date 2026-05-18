@@ -116,6 +116,7 @@ Kaggle에서 바로 실행하려면 **`notebooks/run_numina_on_kaggle.ipynb`** �
 
 | 문서 | 설명 |
 |------|------|
+| [DASHBOARD_DEPLOYMENT.md](guides/DASHBOARD_DEPLOYMENT.md) | 대시보드 GitHub Pages 배포 가이드 |
 | [REFINE_LOOP_USAGE.md](guides/REFINE_LOOP_USAGE.md) | RefineLoop 사용법 |
 | [PROBLEM_DIVERSITY_GUIDE.md](guides/PROBLEM_DIVERSITY_GUIDE.md) | 문제 다양성·평가셋 구성 |
 | [HYBRID_REASONING_ARCHITECTURE.md](guides/HYBRID_REASONING_ARCHITECTURE.md) | 하이브리드 추론 아키텍처 |

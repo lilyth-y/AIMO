@@ -6,6 +6,7 @@ export default defineConfig(({ mode }) => {
     const apiTarget = env.VITE_API_URL || 'http://localhost:8080';
 
     return {
+        base: mode === 'production' ? '/AIMO/' : '/',
         plugins: [react()],
         root: '.',
         publicDir: 'public',

@@ -14,7 +14,7 @@ export default function Accuracy() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/results/numina_balanced_results.json')
+    fetch(`${import.meta.env.BASE_URL}results/numina_balanced_results.json`)
       .then(res => res.json())
       .then(json => {
         setData(json)

@@ -1,0 +1,90 @@
+\section{Conclusion (결론)}
+
+인공지능이 인간의 지적 노동을 대체해 나가는 현시대에, 가장 복잡하고 정교한 사유가 요구되는 '수학(Mathematics)'은 LLM이 정복해야 할 최후의 보루 중 하나로 여겨졌습니다. 본 연구에서 설계하고 구현한 **OMI (Orchestrated Math Interpreter)** 시스템은, 언어 모델의 본질적 한계를 억지로 뜯어고치려 하기보다는, 그 한계를 명확히 인정하고 외부 시스템(파이썬 샌드박스)과 앙상블 체계를 통해 이를 영리하게 우회하는 '에이전트 오케스트레이션(Agentic Orchestration)'의 모범적 해답을 제시했습니다.
+
+\subsection{연구 성과 요약}
+본 연구의 핵심 성과는 크게 세 가지 축으로 요약할 수 있습니다.
+첫째, 인간 수학자의 문제 해결 과정을 소프트웨어적으로 모델링한 **5단계 심층 추론 파이프라인(5-Stage Deep Reasoning Pipeline)**의 완성입니다. 단순한 질의응답 챗봇 수준을 벗어나, 도메인 분류, 지식 검색, 전략 라우팅, 실행 및 에러 정제, 최종 교차 검증이라는 체계적인 프로세스를 통해 수학 문제에 대한 극도의 논리적 강건성(Robustness)을 확보했습니다.
+둘째, 데이터 오염에 대응하기 위한 **역공학 기반의 합성 데이터 엔진(Open-Reverse-Math)** 개발입니다. 정답에서 출발하여 문제를 파생시키는 이 역발상적 접근은, 모델에게 단순한 암기가 아닌 '문제를 설계하고 해체하는 메타인지'를 학습시키는 데 성공했습니다.
+셋째, 백엔드의 복잡한 추론 과정을 프론트엔드로 투명하게 공개한 **Glass-box 교육용 대시보드 및 XAI**의 구현입니다. 이를 통해 AI가 정답에 도달하는 과정을 인간이 직관적으로 이해하고 통제할 수 있게 되었습니다.
+
+\subsection{한계점 및 향후 과제 (Limitations and Future Work)}
+현재 OMI 시스템은 대수학, 정수론, 이산수학과 같이 정답이 명확한 수치로 떨어지는 문제에서는 압도적인 성능을 보이나, 복잡한 기하학적 증명이나 텍스트 위주의 위상수학 문제에서는 파이썬 코드로 치환(Translate)하기 까다로운 한계가 존재합니다. 
+향후 연구에서는 시각적 추론이 가능한 멀티모달(Multi-modal) VLM(Vision-Language Model)을 파이프라인에 통합하여, 도형이나 그래프 이미지를 입력받아 좌표 평면 위의 수식으로 자동 변환하는 기능을 추가할 계획입니다. 또한 본 아키텍처는 수학뿐만 아니라, 극도의 논리적 정밀함이 요구되는 법률 문서 분석 및 복잡한 소프트웨어 버그 디버깅 에이전트로 확장(Scale-out)될 수 있는 무한한 잠재력을 가지고 있습니다.
+\newpage
+\section{References (참고문헌)}
+
+본 연구에서 제안한 OMI 시스템의 설계와 실험의 기초가 된 핵심 학술 문헌 및 오픈소스 기술의 출처를 APA 7판(APA 7th Edition) 규격에 맞춰 정리합니다.
+
+\begingroup
+\setlength{\parindent}{-1.5em}
+\setlength{\leftskip}{1.5em}
+\setlength{\parskip}{0.6em}
+\setstretch{1.3} % 참고문헌 리스트의 조밀한 가독성을 위해 줄간격 조정
+
+Chen, W., Ma, X., Wang, X., \& Cohen, W. W. (2022). Program of thoughts prompting: Disentangling computation from reasoning for numerical reasoning tasks. \textit{arXiv preprint arXiv:2211.12588}. \url{https://doi.org/10.48550/arXiv.2211.12588} \par
+
+Gao, L., Madaan, A., Zhou, S., Alon, U., Liu, P., Yang, Y., Callan, J., \& Neubig, G. (2023). PAL: Program-aided language models. \textit{Proceedings of the 40th International Conference on Machine Learning}, 10764–10799. \url{https://proceedings.mlr.press/v202/gao23a.html} \par
+
+Google DeepMind. (2023). \textit{Gemini: A family of highly capable multimodal models} (Technical Report). Google. \url{https://arxiv.org/abs/2312.11805} \par
+
+Li, Y., Min, B., Zhang, Y., \& Zhang, X. (2024). \textit{NuminaMath: A diverse and high-quality dataset for mathematical reasoning} (Technical Report). Project Numina. \url{https://github.com/project-numina/numina-math} \par
+
+Meurer, A., Smith, C. P., Paprocki, M., Čertík, O., Kirpichev, S. B., Podkalicki, M., ... \& Granger, B. E. (2017). SymPy: symbolic computing in Python. \textit{PeerJ Computer Science}, \textit{3}, e103. \url{https://doi.org/10.7717/peerj-cs.103} \par
+
+Wang, X., Wei, J., Schuurmans, D., Le, Q., Chi, E., Narang, S., Chowdhery, A., \& Zhou, D. (2022). Self-consistency improves chain of thought reasoning in language models. \textit{Advances in Neural Information Processing Systems}, \textit{35}, 27384–27397. \url{https://arxiv.org/abs/2203.11171} \par
+
+Wei, J., Wang, X., Schuurmans, D., Bosma, M., Ichter, B., Xia, F., Chi, E., Le, Q. V., \& Zhou, D. (2022). Chain-of-thought prompting elicits reasoning in large language models. \textit{Advances in Neural Information Processing Systems}, \textit{35}, 24824–24837. \url{https://arxiv.org/abs/2201.11903} \par
+
+Yang, J., Yang, S., Cui, J., An, Y., Liu, C., Wang, S., Zhou, A., Lin, J., Zhang, J., \& Zhou, C. (2024). \textit{Qwen2.5-Math: Technical report} (Technical Report). Alibaba Group. \url{https://arxiv.org/abs/2409.12122} \par
+
+\endgroup
+
+\newpage
+\section{Appendix: 핵심 용어 및 개념 사전 (Glossary)}
+
+본 보고서에서 사용된 주요 기술적 용어와 개념들을 전공자와 비전공자 모두 명확히 이해할 수 있도록 일상적인 비유와 함께 상세히 해설합니다.
+
+\begin{itemize}
+    \item \textbf{오케스트레이션 (Orchestration)}
+    \begin{itemize}
+        \item \textit{개념:} 단일 AI 모델이 모든 작업을 처리하는 대신, 여러 전문화된 에이전트와 도구들의 작업 순서와 상호작용을 중앙에서 지휘하고 조율하는 시스템 아키텍처.
+        \item \textit{비유:} 교향악단의 지휘자(Orchestrator). 바이올린(언어 능력)과 팀파니(연산 능력)가 제각각 연주하지 않도록, 악보(프롬프트와 파이프라인)에 맞춰 각자가 정확한 타이밍에 개입하게 만드는 역할을 합니다.
+    \end{itemize}
+    
+    \item \textbf{TIR (Tool-Integrated Reasoning, 도구 결합 추론)}
+    \begin{itemize}
+        \item \textit{개념:} 언어 모델이 자연어로만 추론을 끝내지 않고, 파이썬 코드 실행기나 심볼릭 계산기(\texttt{SymPy}), 혹은 웹 브라우저와 같은 외부 도구(Tool)를 직접 호출하여 얻은 결과값을 다시 자신의 추론 문맥에 통합하는 기술.
+        \item \textit{비유:} 머릿속으로만 8자리 곱셈을 하려 끙끙대는 대신, 주머니에서 공학용 계산기를 꺼내 두드려 본 뒤 그 액정 화면의 결과를 답안지에 적어내는 똑똑한 수험생의 행동과 같습니다.
+    \end{itemize}
+    
+    \item \textbf{다수결 투표 (Majority Voting) 와 Pass@$k$}
+    \begin{itemize}
+        \item \textit{개념:} LLM의 생성 과정에 내재된 확률적 다양성을 활용하는 앙상블 기법. $k$번 독립적으로 생성(Pass@$k$)한 결과들 중 가장 높은 빈도로 등장한 값을 최종 정답으로 채택합니다.
+        \item \textit{비유:} "백지장도 백 번 맞들면 낫다." 한 명의 덜렁대는 학생에게 똑같은 문제를 100번 풀게 시킵니다. 계산 실수를 하면 100번 모두 각각 엉뚱한 수치로 발산하지만, 논리가 맞았다면 무조건 하나의 올바른 정답으로 수렴합니다. 따라서 가장 많이 나온 답을 고르면 계산 실수를 완벽히 솎아낼 수 있습니다.
+    \end{itemize}
+
+    \item \textbf{Scale-Down Test (축소 검증)}
+    \begin{itemize}
+        \item \textit{개념:} 문제의 목표 파라미터가 천문학적으로 커서($N=10^{100}$) 직접적인 검증이 불가능할 때, 파라미터를 극단적으로 축소하여($N=3$) 해당 알고리즘이나 수식의 참/거짓 유무를 빠르게 가늠하는 디버깅 기법.
+        \item \textit{비유:} 수백만 톤의 하중을 견뎌야 하는 거대한 금문교를 실제 크기로 짓기 전에, 동일한 비율로 축소한 미니어처 다리를 풍동 실험실에 넣어보고 무너지지 않는지 미리 테스트하는 물리적 검증 과정과 동일합니다.
+    \end{itemize}
+
+    \item \textbf{확증 편향 (Confirmation Bias in Auto-regressive Models)}
+    \begin{itemize}
+        \item \textit{개념:} LLM이 왼쪽에서 오른쪽으로(Left-to-Right) 단어를 예측해 나갈 때, 한 번 오답 토큰을 생성하고 나면 그 오답이 뒤따르는 문맥에 조건부 확률(Conditioning)로 묶여, 스스로 틀렸음을 인지하지 못하고 끝까지 오답을 정당화하려는 현상.
+        \item \textit{비유:} 거짓말을 한 번 하고 나면 그 거짓말을 덮기 위해 계속해서 더 큰 거짓말을 지어내며, 절대 자신이 틀렸다고 인정하지 않는 고집쟁이의 모습에 비유할 수 있습니다. (OMI는 백지상태의 Reviewer 에이전트를 투입해 이를 교정합니다.)
+    \end{itemize}
+
+    \item \textbf{역공학 데이터 생성 (Reverse Engineering Data Generation)}
+    \begin{itemize}
+        \item \textit{개념:} "문제 $\rightarrow$ 정답"의 일반적인 데이터 생성 패러다임을 뒤집어, 미리 목표 정답을 확정지은 후 이 정답을 해(Root)로 가지는 복잡한 수학적 구조(다항식, 기하학 모델)를 구축하고, 이를 다시 자연어로 감추어(Obfuscation) 무오류의 문제를 대량 합성하는 기법.
+        \item \textit{비유:} 아주 복잡한 미로 찾기 퍼즐 책을 만들 때, 입구에서 출발하며 길을 그리는 대신 출구(정답)에서부터 연필을 대고 거꾸로 미로를 그려 나가는 방식입니다. 이 방법을 쓰면 절대 출구가 없는 엉터리 미로가 만들어지지 않습니다.
+    \end{itemize}
+
+    \item \textbf{XAI (Explainable AI, 설명 가능한 인공지능)}
+    \begin{itemize}
+        \item \textit{개념:} 딥러닝과 신경망의 예측 결과가 어떠한 수학적, 논리적 근거에 의해 도출되었는지 그 의사결정 과정을 인간이 이해할 수 있는 자연어와 시각적 요소로 풀어서 설명해 주는 기술.
+        \item \textit{비유:} "정답은 4번입니다"라고만 말하고 입을 닫는 무뚝뚝한 컴퓨터가 아니라, "이 문제를 시뮬레이션으로 풀려고 했으나 메모리가 초과될 것 같아, 제가 이러이러한 수학 공식을 이용한 파이썬 코드를 짰고, 그래서 이런 결과가 나왔습니다"라고 친절하게 풀이 과정을 해설해 주는 일타 강사의 해설지와 같습니다.
+    \end{itemize}
+\end{itemize}

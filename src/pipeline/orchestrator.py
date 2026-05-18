@@ -277,7 +277,7 @@ class PipelineOrchestrator:
 
 
 
-    def solve_problem(self, domain: str, variables: Dict[str, Any], problem_text: str, time_budget: float = 60.0) -> Dict[str, Any]:
+    def solve_problem(self, domain: str, variables: Dict[str, Any], problem_text: str, time_budget: float = 60.0, trace_callback=None) -> Dict[str, Any]:
 
 
 
@@ -332,12 +332,18 @@ class PipelineOrchestrator:
             pipeline_trace = []
 
             def add_trace(stage, status, details=None):
-                pipeline_trace.append({
+                item = {
                     "stage": stage,
                     "status": status,
                     "details": details,
                     "timestamp": datetime.datetime.now().isoformat()
-                })
+                }
+                pipeline_trace.append(item)
+                if trace_callback:
+                    try:
+                        trace_callback(item)
+                    except Exception:
+                        pass
 
             add_trace("Pipeline Initialization", "completed", f"Run ID: {request_id}")
 

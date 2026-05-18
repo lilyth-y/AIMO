@@ -37,7 +37,7 @@ export default function Comparison() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/results/comparison_data.json')
+    fetch(`${import.meta.env.BASE_URL}results/comparison_data.json`)
       .then(res => res.json())
       .then(json => {
         setData(json)

@@ -1,0 +1,63 @@
+\section{Related Work: AI는 왜 수학을 못할까? (관련 연구 및 배경)}
+
+본 연구의 OMI 아키텍처는 인공지능 학계에서 활발하게 논의되고 있는 세 가지 거대한 흐름 위에 구축되었습니다. 첫째는 LLM에 외부 도구를 쥐여주는 도구 결합 추론(Tool-Integrated Reasoning), 둘째는 확률 모델을 활용하여 정답을 보정하는 앙상블 및 다수결 투표(Majority Voting), 셋째는 여러 모델이 역할을 나누어 상호작용하는 다중 에이전트 토론(Multi-Agent Debate) 시스템입니다. 본 장에서는 각 분야의 기존 연구 성과와 그 한계를 짚어보고, 본 연구가 어떠한 차별점을 가지는지 심도 있게 분석합니다.
+
+\subsection{Tool-Integrated Reasoning (도구 결합 추론의 진화)}
+대형 언어 모델 초기에는 "모든 지식을 파라미터 내부에 저장하고, 모든 연산을 신경망으로만 처리해야 한다"는 암묵적인 가정이 존재했습니다. 이로 인해 GPT-3 모델 등은 세 자리 수의 곱셈이나 사칙연산조차 제대로 수행하지 못하는 현상을 보였습니다. 그러나 이러한 접근법은 비효율적임이 입증되었습니다. 마치 인간이 머릿속으로 미적분 방정식을 암산하지 않고 종이와 펜, 혹은 계산기를 꺼내 드는 것과 같은 이치입니다.
+
+\subsubsection{PAL (Program-Aided Language models) 과 PoT (Program of Thoughts)}
+이러한 문제를 해결하기 위해 제시된 초기 연구가 바로 PAL(Gao et al., 2023)과 PoT(Chen et al., 2022)입니다. 기존의 Chain-of-Thought(CoT) 프롬프팅이 "문제를 한 단계씩 풀어서 자연어로 설명해봐"라고 명령했다면, PAL과 PoT는 "문제를 푸는 과정을 파이썬 코드로 작성하고 변수를 할당해봐"라고 명령합니다. 
+
+예를 들어, "철수가 사과 3개를 가지고 있고, 영희가 5배를 주었다면 총 몇 개인가?"라는 문제에서 모델은 다음과 같은 코드를 생성합니다.
+\begin{lstlisting}[language=Python, caption=Program-Aided Language Model 예시]
+apples_cheolsu = 3
+apples_given_by_younghee = apples_cheolsu * 5
+total_apples = apples_cheolsu + apples_given_by_younghee
+print(total_apples)
+\end{lstlisting}
+이렇게 작성된 코드는 백그라운드의 파이썬 인터프리터에서 실행되고, 모델은 출력된 `18`이라는 완벽한 결과값을 가져와 사용자에게 전달합니다. 이 방식은 LLM의 최대 약점인 '계산 오류'를 파이썬이라는 절대적으로 신뢰할 수 있는 외부 엔진(Symbolic Engine)으로 분리(Decoupling)시켰다는 점에서 혁명적이었습니다. 
+
+\subsubsection{기존 TIR 연구의 한계와 OMI의 차별점}
+그러나 기존 PAL이나 PoT 방식은 1차원적인 코드 실행에 그쳤습니다. 만약 작성한 파이썬 코드에 `SyntaxError`나 무한 루프(`Timeout`)가 발생하면 시스템은 그대로 정지해버리며 오답을 반환했습니다. 
+
+반면 본 프로젝트의 OMI 파이프라인은 \textbf{실패를 전제로 한 반복적 수정(Iterative Refinement)} 구조를 갖추고 있습니다. Stage 4 (Execution) 단계에서 에러가 발생할 경우, 모델은 에러 추적 메시지(Traceback)를 읽고 "아, 숫자가 너무 커서 메모리 초과가 났구나. 수학 공식(Theoretician 접근)으로 다시 코드를 짜야겠다"라고 자가 교정(Self-Correction)을 수행합니다. 이는 단순한 도구 사용을 넘어선 진정한 의미의 '도구 결합형 에이전트'입니다.
+
+\subsection{Ensemble Methods: Pass@$k$ 와 Majority Voting}
+수학 문제는 본질적으로 정답이 하나로 수렴하는 독특한 특징을 가집니다. 일반적인 글쓰기나 번역은 수백 가지의 '좋은 답'이 존재할 수 있지만, 정수론이나 대수학 문제에서는 $x=42$ 라는 유일한 해답만이 존재합니다.
+
+\subsubsection{Pass@$k$ 확률 모델의 수학적 원리}
+언어 모델은 Temperature 매개변수가 0보다 클 때, 매번 다른 궤적을 그리며 텍스트를 생성합니다. 즉, 동일한 문제를 줘도 첫 번째 시도에는 중간에 덧셈을 틀리고, 두 번째 시도에는 올바르게 풀 수 있습니다. 어떤 모델이 한 번 시도했을 때 정답을 맞힐 확률(Pass@1)이 $p$라고 합시다. 만약 이 모델에게 독립적으로 $k$번 문제를 풀게 했을 때, 그 중 적어도 한 번은 올바른 풀이를 생성할 확률, 즉 Pass@$k$는 다음과 같이 정의됩니다.
+\begin{equation}
+Pass@k = 1 - (1 - p)^k
+\end{equation}
+만약 모델의 1회 정답률 $p = 0.2$ (20\%)로 매우 낮더라도, $k=20$번 시도하게 되면 $Pass@20 = 1 - (0.8)^{20} \approx 0.988$ (98.8\%) 로 폭발적으로 상승하게 됩니다. 이는 거대 모델 하나를 돌리는 것보다, 작은 모델을 여러 번 돌리는 것(Scaling Test-time Compute)이 복잡한 수학 추론에서 훨씬 유리할 수 있음을 수학적으로 시사합니다.
+
+\subsubsection{Majority Voting (다수결 투표)의 정당성}
+그렇다면 $k$번의 시도에서 나온 $k$개의 서로 다른 답변 중 어느 것이 정답인지 어떻게 알아낼 수 있을까요? 2022년 Google Brain의 연구 "Self-Consistency Improves Chain of Thought Reasoning in Language Models"는 아주 우아한 해답을 제시했습니다. 바로 **가장 빈도수가 높은 답을 고르는 것**입니다.
+
+이 원리는 오답의 발산성(Divergence)과 정답의 수렴성(Convergence)에 기반합니다.
+\begin{itemize}
+    \item \textbf{오답의 발산:} 모델이 계산 실수나 논리적 오류를 범할 경우, 그 결괏값은 랜덤한 방향으로 튑니다. 10번 시도해서 7번 틀렸다면, 그 오답들은 [15, -3, 102, 5, 42.5, 9, 0] 처럼 각기 다른 7개의 숫자로 흩어집니다.
+    \item \textbf{정답의 수렴:} 반면 모델이 올바른 논리(대수적 풀이든 기하학적 풀이든)를 탔다면, 그 최종 목적지는 무조건 동일한 정답(예: 42)으로 귀결됩니다. 10번 중 3번 정답을 맞혔다면, 리스트에는 [42, 42, 42] 가 존재합니다.
+\end{itemize}
+결과적으로 오답들의 빈도는 보통 1에 머물지만, 정답의 빈도는 3으로 가장 높게 나타납니다. OMI 시스템은 이 강력한 통계적 속성을 내재화하여, 난이도가 높은 문제일수록 Temperature를 높여 다중 궤적(Multiple Trajectories)을 생성한 뒤 다수결 투표로 오답 노이즈를 완벽히 필터링합니다.
+
+\subsection{Multi-Agent Systems: 확증 편향과 인지적 비대칭성의 극복}
+언어 모델은 근본적으로 한 방향으로만 텍스트를 써 내려가는(Left-to-Right) 자기 회귀 구조를 띠고 있습니다. 이로 인해 발생하는 가장 심각한 인지적 오류가 **확증 편향(Confirmation Bias)**입니다. 
+
+\subsubsection{생성과 검증의 비대칭성 (Asymmetry of Generation and Verification)}
+인간 학생들을 관찰해 보면, 아무것도 없는 백지 상태에서 완벽한 수학 증명을 써 내려가는 것(Generation)은 매우 어려워하지만, 남이 써놓은 증명 과정에서 부호가 잘못되었거나 공식을 잘못 적용한 부분을 찾아내는 것(Verification)은 훨씬 수월하게 해냅니다. LLM 역시 동일한 특성을 보입니다.
+
+만약 한 모델(단일 에이전트)에게 "네가 쓴 코드를 다시 읽고 틀린 부분을 찾아봐"라고 명령하면, 모델은 이미 자신이 출력한 오답 토큰들에 강한 확률적 제약(Conditioning)을 받고 있기 때문에, 억지 논리를 펼치며 "이 코드는 완벽합니다"라고 우기는 경향이 매우 강합니다.
+
+\subsubsection{OMI의 Multi-Agent Debate 구조}
+이 문제를 타파하기 위해 OMI 파이프라인은 '생성자(Maker)'와 '검증자(Checker)' 역할을 엄격하게 분리하는 \textbf{다중 에이전트 토론(Multi-Agent Debate)} 시스템을 설계했습니다. 
+
+\begin{itemize}
+    \item \textbf{Coder Agent:} 주어진 문제를 분석하고 파이썬 코드를 작성하는 데 모든 어텐션(Attention) 자원을 집중합니다.
+    \item \textbf{Reviewer Agent:} 백지상태(새로운 Context)에서 시작합니다. 이전 모델이 저지른 확률적 확증 편향에 전혀 오염되지 않은 상태로, 오직 "제시된 파이썬 코드가 문제의 제약 조건(예: $x > 0$)을 위반하지 않았는가?" 혹은 "루프의 종료 조건이 정확한가?"라는 단일 목적에만 집중하여 코너 케이스(Corner Case)를 잡아냅니다.
+\end{itemize}
+이처럼 역할을 분리한 에이전트들이 상호 작용하며 코드를 수정해 나가는 방식은, 단일 거대 모델 하나를 맹목적으로 믿는 것보다 물리적으로 훨씬 더 견고한 결과를 보장합니다.
+
+\subsection{소결}
+요약하자면, 본 OMI 프로젝트는 학계에서 산발적으로 연구되던 도구 결합(TIR), 통계적 앙상블(Self-Consistency), 다중 에이전트 토론(Debate)을 하나의 거대하고 유기적인 파이프라인으로 매끄럽게 오케스트레이션(Orchestration)한 결정체라 할 수 있습니다. 3장에서는 이러한 이론적 배경들이 어떻게 실제 OMI의 5단계 파이프라인 알고리즘으로 구현되었는지 상세히 기술합니다.
